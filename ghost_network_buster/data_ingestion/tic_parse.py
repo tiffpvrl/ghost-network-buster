@@ -63,11 +63,57 @@ def _resolve_provider_refs(
 ) -> set[str]:
     out: set[str] = set()
     for pref in refs:
+        if isinstance(pref, bool):
+            continue
         if isinstance(pref, int):
             out.update(id_map.get(pref, ()))
+        elif isinstance(pref, float) and pref.is_integer():
+            out.update(id_map.get(int(pref), ()))
         elif isinstance(pref, dict):
             _add_npis_from_obj(pref, out)
+        else:
+            # ijson may emit Decimal for JSON integers
+            try:
+                key = int(pref)
+            except (TypeError, ValueError):
+                continue
+            else:
+                out.update(id_map.get(key, ()))
     return out
+
+
+def _npis_from_provider_reference_item(item: dict) -> list[str]:
+    """NPIs may live on the item or under nested provider_groups (common in issuer MRFs)."""
+    collected: list[str] = []
+    top = item.get("npi")
+    if isinstance(top, list):
+        collected.extend(str(n).strip() for n in top if n is not None and str(n).strip())
+    for pg in item.get("provider_groups") or []:
+        if not isinstance(pg, dict):
+            continue
+        for n in pg.get("npi") or []:
+            if n is not None and str(n).strip():
+                collected.append(str(n).strip())
+    seen: set[str] = set()
+    out: list[str] = []
+    for x in collected:
+        if x not in seen:
+            seen.add(x)
+            out.append(x)
+    return out
+
+
+def _coerce_provider_group_id(raw: Any) -> int | None:
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float) and raw.is_integer():
+        return int(raw)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
 
 
 def build_provider_reference_map(path: Path) -> dict[int, list[str]]:
@@ -83,9 +129,9 @@ def build_provider_reference_map(path: Path) -> dict[int, list[str]]:
                 if not isinstance(item, dict):
                     idx += 1
                     continue
-                npis = [str(n).strip() for n in (item.get("npi") or []) if n is not None]
-                gid = item.get("provider_group_id")
-                if isinstance(gid, int):
+                npis = _npis_from_provider_reference_item(item)
+                gid = _coerce_provider_group_id(item.get("provider_group_id"))
+                if gid is not None:
                     id_map[gid] = npis
                 id_map[idx] = npis
                 idx += 1

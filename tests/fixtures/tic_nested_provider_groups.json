@@ -1,0 +1,15 @@
+{
+  "provider_references": [
+    {
+      "provider_group_id": 42,
+      "provider_groups": [{ "npi": [1234567893] }]
+    }
+  ],
+  "in_network": [
+    {
+      "billing_code": "90837",
+      "billing_code_type": "CPT",
+      "negotiated_rates": [{ "provider_references": [42] }]
+    }
+  ]
+}

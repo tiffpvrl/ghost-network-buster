@@ -12,5 +12,4 @@ dist/
 data/audits/*.json
 data/memory_npi/*.json
 planning/
-2026-04-05_Aetna-Health-Insurance-Company-of-New-York_index.json.gz
-2026-04-05_pl-bq-hr23_Aetna-Health-Insurance-Company-of-New-York.json.gz
+aetna_raw/
