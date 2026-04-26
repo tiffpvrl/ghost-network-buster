@@ -1,0 +1,16 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+*.egg-info/
+.DS_Store
+data/audits/*.json
+data/memory_npi/*.json
+planning/
+2026-04-05_Aetna-Health-Insurance-Company-of-New-York_index.json.gz
+2026-04-05_pl-bq-hr23_Aetna-Health-Insurance-Company-of-New-York.json.gz

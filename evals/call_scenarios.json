@@ -1,0 +1,27 @@
+[
+  {
+    "id": "voicemail_basic",
+    "transcript": "You've reached the voicemail of Example Clinic. Please leave a message after the tone.\n[Beep]",
+    "expected_status": "voicemail"
+  },
+  {
+    "id": "disconnected",
+    "transcript": "[Dial tone / number not in service]",
+    "expected_status": "ghost"
+  },
+  {
+    "id": "wrong_network",
+    "transcript": "Reception: Test Practice.\nAgent: Do you accept Aetna for behavioral health?\nReception: We haven't taken Aetna in years — we're out of network.\n",
+    "expected_status": "ghost"
+  },
+  {
+    "id": "accepting",
+    "transcript": "Reception: Hi.\nAgent: Are you accepting new therapy patients with Aetna?\nReception: Yes, we are. Next opening is in about a week.\n",
+    "expected_status": "real"
+  },
+  {
+    "id": "ambiguous",
+    "transcript": "Please hold while we connect you.",
+    "expected_status": "no_answer"
+  }
+]

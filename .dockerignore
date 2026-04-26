@@ -1,0 +1,13 @@
+.venv
+venv
+__pycache__
+*.pyc
+.git
+frontend/node_modules
+frontend/dist
+*.pdf
+.env
+.pytest_cache
+.mypy_cache
+.ruff_cache
+ghost-network-buster

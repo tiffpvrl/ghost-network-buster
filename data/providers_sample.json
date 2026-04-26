@@ -1,0 +1,72 @@
+[
+  {
+    "npi": "1999000001",
+    "name": "Sample Therapy Group - Dr. Chen",
+    "phone": "+12125550101",
+    "specialty": "Anxiety / trauma",
+    "mock_outcome": "real"
+  },
+  {
+    "npi": "1999000002",
+    "name": "Downtown Counseling LLC",
+    "phone": "+12125550102",
+    "specialty": "General",
+    "mock_outcome": "ghost_disconnected"
+  },
+  {
+    "npi": "1999000003",
+    "name": "Riverside Mental Health",
+    "phone": "+12125550103",
+    "specialty": "ADHD",
+    "mock_outcome": "ghost_wrong_network"
+  },
+  {
+    "npi": "1999000004",
+    "name": "Harlem Wellness Center",
+    "phone": "+12125550104",
+    "specialty": "LGBTQ+ affirming",
+    "mock_outcome": "voicemail"
+  },
+  {
+    "npi": "1999000005",
+    "name": "Brooklyn Bridge Psychotherapy",
+    "phone": "+12125550105",
+    "specialty": "EMDR",
+    "mock_outcome": "ghost_disconnected"
+  },
+  {
+    "npi": "1999000006",
+    "name": "Midtown Behavioral Associates",
+    "phone": "+12125550106",
+    "specialty": "DBT",
+    "mock_outcome": "ghost_wrong_network"
+  },
+  {
+    "npi": "1999000007",
+    "name": "Upper West Side Counseling",
+    "phone": "+12125550107",
+    "specialty": "Couples",
+    "mock_outcome": "ghost_disconnected"
+  },
+  {
+    "npi": "1999000008",
+    "name": "Financial District Therapy Co-op",
+    "phone": "+12125550108",
+    "specialty": "Burnout",
+    "mock_outcome": "ghost_wrong_network"
+  },
+  {
+    "npi": "1999000009",
+    "name": "East Village Psychiatric NP",
+    "phone": "+12125550109",
+    "specialty": "Medication management",
+    "mock_outcome": "voicemail"
+  },
+  {
+    "npi": "1999000010",
+    "name": "SoHo Integrative Health",
+    "phone": "+12125550110",
+    "specialty": "Somatic",
+    "mock_outcome": "ghost_disconnected"
+  }
+]

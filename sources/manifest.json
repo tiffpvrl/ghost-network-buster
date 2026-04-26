@@ -1,0 +1,52 @@
+{
+  "emblemhealth-inc-assurance-of-discontinuance-2026.pdf": {
+    "display_name": "EmblemHealth Assurance of Discontinuance (NY AG / DFS)",
+    "doc_type": "enforcement_action",
+    "jurisdiction": "ny_state",
+    "date": "2026-02",
+    "retrieval_boost": 2.0,
+    "notes": "High-weight precedent for ghost-network / directory accuracy narrative."
+  },
+  "final-rules-under-the-mental-health-parity-and-addiction-equity-act-mhpaea.pdf": {
+    "display_name": "MHPAEA-related federal rules (CMS)",
+    "doc_type": "regulation",
+    "jurisdiction": "federal",
+    "date": "2024",
+    "retrieval_boost": 1.25
+  },
+  "No-Surprises-Act.pdf": {
+    "display_name": "No Surprises Act — directory / disclosure themes",
+    "doc_type": "statute_summary",
+    "jurisdiction": "federal",
+    "date": "",
+    "retrieval_boost": 1.35
+  },
+  "Network Adequacy and Access Standards for Behavioral Health Services.pdf": {
+    "display_name": "Network adequacy / behavioral health access (planning source)",
+    "doc_type": "regulation",
+    "jurisdiction": "federal",
+    "date": "",
+    "retrieval_boost": 1.1
+  },
+  "report-to-congress-2024.pdf": {
+    "display_name": "Report to Congress 2024",
+    "doc_type": "study",
+    "jurisdiction": "federal",
+    "date": "2024",
+    "retrieval_boost": 0.85
+  },
+  "A_274577-1B Training 2_NSA Disclosure Continuity of Care Directories_FINAL 508.pdf": {
+    "display_name": "NSA directory / continuity of care training",
+    "doc_type": "guidance",
+    "jurisdiction": "federal",
+    "date": "",
+    "retrieval_boost": 1.2
+  },
+  "rf-ins-reg230-text.pdf": {
+    "display_name": "NY DFS insurance regulation text (source PDF)",
+    "doc_type": "regulation",
+    "jurisdiction": "ny_state",
+    "date": "",
+    "retrieval_boost": 1.15
+  }
+}
