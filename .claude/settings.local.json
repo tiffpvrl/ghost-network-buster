@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:www.dfs.ny.gov)",
+      "Bash(Start-Process:*)",
+      "Bash(cmd.exe:*)"
     ]
   }
 }

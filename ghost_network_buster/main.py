@@ -26,7 +26,7 @@ from ghost_network_buster.adk_blueprint import agent_tree_to_dict, build_audit_a
 from ghost_network_buster.config import Settings, get_settings
 from ghost_network_buster.models import AuditState, AuditSummary, Provider
 from ghost_network_buster.pipeline.run_audit import run_audit_pipeline
-from ghost_network_buster.reports import build_audit_summary_pdf, build_complaint_draft_pdf
+from ghost_network_buster.reports import build_audit_summary_pdf, build_complaint_draft_docx
 from ghost_network_buster.services.audit_store import AuditStore
 from ghost_network_buster.services.ws_hub import WsHub
 from ghost_network_buster.tools.rag import retrieve
@@ -168,7 +168,7 @@ def _compute_summary(state: AuditState, voice_mode: str) -> AuditSummary:
         other_count=max(0, other),
         ghost_rate=gr,
         voicemail_rate=vr,
-        complaint_eligible=gr >= 0.70,
+        complaint_eligible=ghosts > 0,
         top_providers=top,
         results=list(results),
         share_path=f"/results/{state.audit_id}",
@@ -358,13 +358,13 @@ async def download_complaint(
     if not summary.complaint_eligible:
         raise HTTPException(
             status_code=400,
-            detail="Complaint draft available when ghost rate is at least 70%.",
+            detail="Complaint draft requires at least one ghost listing.",
         )
-    pdf = build_complaint_draft_pdf(state, summary, rag_hits=summary.rag_hits, gcp_project=settings.google_cloud_project, vertex_location=settings.vertex_location)
+    docx = build_complaint_draft_docx(state, summary, rag_hits=summary.rag_hits, gcp_project=settings.google_cloud_project, vertex_location=settings.vertex_location)
     return Response(
-        content=pdf,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="gnb-complaint-{audit_id[:8]}.pdf"'},
+        content=docx,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="gnb-complaint-{audit_id[:8]}.docx"'},
     )
 
 
