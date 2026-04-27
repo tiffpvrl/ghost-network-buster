@@ -8,10 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -85,6 +89,10 @@ class StartAuditRequest(BaseModel):
         ge=1,
         le=500,
         description="Limit rows from sample file for quick tests",
+    )
+    override_cost_guard: bool = Field(
+        default=False,
+        description="Set true to bypass pipecat_cost_guard limit (use carefully — real Twilio charges apply).",
     )
 
 
@@ -228,6 +236,30 @@ async def start_audit(
         get_voice_provider(settings)
     except VoiceConfigurationError as e:
         raise HTTPException(status_code=503, detail=str(e)) from e
+
+    # Cost guard: block large pipecat batches to prevent accidental Twilio charges.
+    if settings.voice_provider == "pipecat" and settings.pipecat_cost_guard > 0:
+        if len(providers) > settings.pipecat_cost_guard and not body.override_cost_guard:
+            est = len(providers) * 0.75 * 0.014
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cost guard: {len(providers)} providers would cost ~${est:.2f} in Twilio charges "
+                    f"(PIPECAT_COST_GUARD={settings.pipecat_cost_guard}). "
+                    "Pass override_cost_guard=true to proceed, or reduce max_providers."
+                ),
+            )
+
+    if settings.voice_provider == "pipecat":
+        est = len(providers) * 0.75 * 0.014
+        import logging as _log  # noqa: PLC0415
+        _log.getLogger(__name__).warning(
+            "PIPECAT AUDIT STARTING — %d real Twilio calls, est. $%.2f. "
+            "Monitor at console.twilio.com.",
+            len(providers),
+            est,
+        )
+
     store.cache_put(state)
     await store.save(state)
 
@@ -328,12 +360,216 @@ async def download_complaint(
             status_code=400,
             detail="Complaint draft available when ghost rate is at least 70%.",
         )
-    pdf = build_complaint_draft_pdf(state, summary, rag_hits=summary.rag_hits)
+    pdf = build_complaint_draft_pdf(state, summary, rag_hits=summary.rag_hits, gcp_project=settings.google_cloud_project, vertex_location=settings.vertex_location)
     return Response(
         content=pdf,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="gnb-complaint-{audit_id[:8]}.pdf"'},
     )
+
+
+@app.post("/webhook/twilio/answer/{call_id}")
+async def twilio_answer(call_id: str, settings: Settings = Depends(get_settings)) -> Response:
+    """
+    Twilio hits this URL when the provider answers the call.
+    Returns TwiML that streams audio to the Pipecat WebSocket pipeline.
+    """
+    from ghost_network_buster.tools.pipecat_provider import _CALL_META  # noqa: PLC0415
+
+    meta = _CALL_META.get(call_id, {})
+    carrier_hint = meta.get("carrier_hint", "your insurance")
+    public_host = (settings.public_url or "").replace("https://", "").replace("http://", "").rstrip("/")
+    ws_url = f"wss://{public_host}/ws/twilio-audio/{call_id}"
+    twiml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<Response>"
+        "<Connect>"
+        f'<Stream url="{ws_url}">'
+        f'<Parameter name="carrier_hint" value="{carrier_hint}"/>'
+        "</Stream>"
+        "</Connect>"
+        "</Response>"
+    )
+    return Response(content=twiml, media_type="text/xml")
+
+
+@app.websocket("/ws/twilio-audio/{call_id}")
+async def twilio_audio_ws(websocket: WebSocket, call_id: str, request: Request) -> None:
+    """
+    Pipecat pipeline: Twilio audio stream → Deepgram STT → Gemini LLM → EdgeTTS → audio back.
+    Resolves the pending Future in pipecat_provider when the call ends.
+    """
+    from datetime import datetime, timezone  # noqa: PLC0415
+
+    from ghost_network_buster.agents.classifier import classify_transcript  # noqa: PLC0415
+    from ghost_network_buster.models import CallResult  # noqa: PLC0415
+    from ghost_network_buster.tools.pipecat_provider import _CALL_META, _PENDING_CALLS  # noqa: PLC0415
+
+    await websocket.accept()
+    logger.info("Pipecat WS opened for call_id=%s", call_id)
+
+    meta = _CALL_META.get(call_id, {})
+    provider = meta.get("provider")
+    carrier_hint = meta.get("carrier_hint", "your insurance")
+    future = _PENDING_CALLS.get(call_id)
+    settings: Settings = request.app.state.settings
+    ts = datetime.now(timezone.utc).isoformat()
+
+    def _resolve(result: CallResult) -> None:
+        if future and not future.done():
+            future.set_result(result)
+
+    try:
+        from pipecat.audio.vad.silero import SileroVADAnalyzer  # noqa: PLC0415
+        from pipecat.pipeline.pipeline import Pipeline  # noqa: PLC0415
+        from pipecat.pipeline.runner import PipelineRunner  # noqa: PLC0415
+        from pipecat.pipeline.task import PipelineParams, PipelineTask  # noqa: PLC0415
+        from pipecat.processors.frame_processor import FrameDirection, FrameProcessor  # noqa: PLC0415
+        from pipecat.frames.frames import (  # noqa: PLC0415
+            EndFrame,
+            LLMTextFrame,
+            TranscriptionFrame,
+        )
+        from pipecat.services.deepgram import DeepgramSTTService  # noqa: PLC0415
+        from pipecat.services.edge_tts import EdgeTTSService  # noqa: PLC0415
+        from pipecat.transports.services.twilio import TwilioTransport, TwilioParams  # noqa: PLC0415
+        from pipecat.frames.frames import LLMFullResponseEndFrame, LLMFullResponseStartFrame  # noqa: PLC0415
+
+        transcript_lines: list[str] = []
+
+        class TranscriptCapture(FrameProcessor):
+            async def process_frame(self, frame, direction: FrameDirection):  # type: ignore[override]
+                await super().process_frame(frame, direction)
+                if isinstance(frame, TranscriptionFrame):
+                    transcript_lines.append(f"Provider: {frame.text}")
+                elif isinstance(frame, LLMTextFrame):
+                    transcript_lines.append(f"Agent: {frame.text}")
+                await self.push_frame(frame, direction)
+
+        provider_name = provider.name if provider else "the practice"
+        system_prompt = (
+            f"You are a healthcare directory verification assistant calling {provider_name}. "
+            f"Your only goal is to verify whether the practice currently accepts {carrier_hint} "
+            "insurance for behavioral health services and is accepting new patients. "
+            f"When someone answers, greet them and ask: 'Hi, I'm confirming directory "
+            f"information — does your practice accept {carrier_hint} insurance for behavioral "
+            "health, and are you currently accepting new patients?' "
+            "After you receive a clear answer (yes or no), say 'Thank you so much, have a great day!' "
+            "and end the conversation. Keep the call under 90 seconds."
+        )
+
+        class _VertexLLMProcessor(FrameProcessor):
+            """Minimal Vertex AI LLM processor using google.genai SDK."""
+
+            def __init__(self) -> None:
+                super().__init__()
+                from google import genai  # noqa: PLC0415
+                self._client = genai.Client(
+                    vertexai=True,
+                    project=settings.google_cloud_project,
+                    location=settings.vertex_location,
+                )
+                self._history: list = []
+
+            async def process_frame(self, frame, direction: FrameDirection):  # type: ignore[override]
+                await super().process_frame(frame, direction)
+                if isinstance(frame, TranscriptionFrame) and frame.text.strip():
+                    self._history.append({"role": "user", "parts": [{"text": frame.text}]})
+                    # Push the transcription frame so TranscriptCapture records provider speech.
+                    await self.push_frame(frame, direction)
+                    await self.push_frame(LLMFullResponseStartFrame())
+                    resp = await asyncio.to_thread(
+                        self._client.models.generate_content,
+                        model="gemini-2.0-flash",
+                        contents=self._history,
+                        config={"system_instruction": system_prompt},
+                    )
+                    reply = (resp.text or "").strip()
+                    if reply:
+                        self._history.append({"role": "model", "parts": [{"text": reply}]})
+                        await self.push_frame(LLMTextFrame(text=reply))
+                    await self.push_frame(LLMFullResponseEndFrame())
+                else:
+                    await self.push_frame(frame, direction)
+
+        transport = TwilioTransport(
+            websocket,
+            TwilioParams(audio_in_enabled=True, audio_out_enabled=True, vad_analyzer=SileroVADAnalyzer()),
+        )
+        stt = DeepgramSTTService(api_key=settings.deepgram_api_key or "")
+        llm = _VertexLLMProcessor()
+        tts = EdgeTTSService(voice="en-US-AriaNeural")
+        capture = TranscriptCapture()
+
+        pipeline = Pipeline(
+            [
+                transport.input(),
+                stt,
+                llm,
+                tts,
+                capture,
+                transport.output(),
+            ]
+        )
+        task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True))
+
+        @transport.event_handler("on_client_disconnected")
+        async def on_disconnect(_transport, _client):  # type: ignore[misc]
+            await task.queue_frame(EndFrame())
+
+        runner = PipelineRunner()
+        await runner.run(task)
+
+        full_transcript = "\n".join(transcript_lines)
+        logger.info("Pipecat WS closed for call_id=%s — transcript lines: %d", call_id, len(transcript_lines))
+        npi = provider.npi if provider else call_id
+        phone = provider.phone if provider else ""
+        specialty = provider.specialty if provider else None
+        status, ghost_reason, summary_text = classify_transcript(full_transcript, carrier_hint=carrier_hint)
+        logger.info(
+            "Classifier call_id=%s → status=%s ghost_reason=%s",
+            call_id, status, ghost_reason or "none",
+        )
+        result = CallResult(
+            npi=npi,
+            phone=phone,
+            status=status,
+            ghost_reason=ghost_reason,
+            transcript=full_transcript or "[empty transcript]",
+            summary=summary_text,
+            provider_name=provider_name,
+            specialty=specialty,
+            verified_at=ts,
+        )
+        _resolve(result)
+
+    except ImportError as exc:
+        msg = f"Pipecat not installed: {exc}. Run: pip install -e '.[pipecat]'"
+        import logging  # noqa: PLC0415
+        logging.getLogger(__name__).error(msg)
+        result = CallResult(
+            npi=provider.npi if provider else call_id,
+            phone=provider.phone if provider else "",
+            status="error",
+            transcript=f"[{msg}]",
+            summary="Pipecat deps missing.",
+            provider_name=provider.name if provider else None,
+            verified_at=ts,
+        )
+        _resolve(result)
+    except Exception as exc:
+        import logging  # noqa: PLC0415
+        logging.getLogger(__name__).exception("Pipecat pipeline error for call_id=%s", call_id)
+        result = CallResult(
+            npi=provider.npi if provider else call_id,
+            phone=provider.phone if provider else "",
+            status="error",
+            transcript=f"[Pipeline error: {exc}]",
+            summary="Pipeline error during call.",
+            provider_name=provider.name if provider else None,
+            verified_at=ts,
+        )
+        _resolve(result)
 
 
 @app.get("/api/employer/mock-dashboard", dependencies=[Depends(_require_demo_key)])

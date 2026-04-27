@@ -71,6 +71,8 @@ def build_complaint_draft_pdf(
     state: AuditState,
     summary: AuditSummary,
     rag_hits: list[dict[str, object]] | None = None,
+    gcp_project: str | None = None,
+    vertex_location: str = "us-central1",
 ) -> bytes:
     """Template-style draft for high ghost-rate audits (not legal advice)."""
     pdf = FPDF()
@@ -95,7 +97,7 @@ def build_complaint_draft_pdf(
     pdf.set_font("Helvetica", "B", 11)
     pdf.multi_cell(0, 6, _ascii_pdf_text("Legal framing (draft — verify current text)"))
     pdf.set_font("Helvetica", size=10)
-    legal = (
+    _template_legal = (
         "For New York commercial coverage, directory and network-adequacy expectations may be "
         "framed using: (1) federal transparency and directory rules tied to the No Surprises Act "
         "and related MHPAEA implementation, where inaccurate directories undermine access and "
@@ -106,6 +108,20 @@ def build_complaint_draft_pdf(
         "this audit. Chain these layers explicitly in any formal complaint and cite the "
         "retrieved excerpts your counsel validates."
     )
+    # Try Vertex AI Gemini narrative; fall back to template if project not configured.
+    if gcp_project:
+        from ghost_network_buster.agents import complaint_agent  # noqa: PLC0415
+        llm_narrative = complaint_agent.generate_complaint_narrative(
+            state.carrier,
+            state.zip_code,
+            summary.ghost_rate,
+            [dict(h) for h in (rag_hits or [])],
+            gcp_project,
+            vertex_location,
+        )
+    else:
+        llm_narrative = ""
+    legal = llm_narrative if llm_narrative else _template_legal
     pdf.multi_cell(0, 5, _ascii_pdf_text(legal))
     pdf.ln(3)
     pdf.set_font("Helvetica", "B", 11)

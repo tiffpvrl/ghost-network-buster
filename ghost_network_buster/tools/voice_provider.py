@@ -192,6 +192,33 @@ class RetellVoiceProvider(VoiceProvider):
 def get_voice_provider(settings: Settings) -> VoiceProvider:
     if settings.voice_provider == "mock":
         return MockVoiceProvider()
+    if settings.voice_provider == "pipecat":
+        from ghost_network_buster.tools.pipecat_provider import PipecatVoiceProvider  # noqa: PLC0415
+
+        missing = [
+            name
+            for name, val in [
+                ("TWILIO_ACCOUNT_SID", settings.twilio_account_sid),
+                ("TWILIO_AUTH_TOKEN", settings.twilio_auth_token),
+                ("TWILIO_FROM_NUMBER", settings.twilio_from_number),
+                ("PUBLIC_URL", settings.public_url),
+                ("DEEPGRAM_API_KEY", settings.deepgram_api_key),
+                ("GOOGLE_CLOUD_PROJECT", settings.google_cloud_project),
+            ]
+            if not val
+        ]
+        if missing:
+            raise VoiceConfigurationError(
+                f"VOICE_PROVIDER=pipecat requires: {', '.join(missing)}. "
+                "See .env.example for setup instructions."
+            )
+        return PipecatVoiceProvider(
+            account_sid=settings.twilio_account_sid,  # type: ignore[arg-type]
+            auth_token=settings.twilio_auth_token,  # type: ignore[arg-type]
+            from_number=settings.twilio_from_number,  # type: ignore[arg-type]
+            public_url=settings.public_url,  # type: ignore[arg-type]
+            deepgram_api_key=settings.deepgram_api_key,  # type: ignore[arg-type]
+        )
     if not settings.retell_api_key or not settings.retell_agent_id:
         raise VoiceConfigurationError(
             "VOICE_PROVIDER=retell requires RETELL_API_KEY and RETELL_AGENT_ID. "

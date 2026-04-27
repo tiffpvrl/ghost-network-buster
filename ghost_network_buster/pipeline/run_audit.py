@@ -52,10 +52,19 @@ async def run_audit_pipeline(
     try:
         voice = get_voice_provider(settings)
         sem = asyncio.Semaphore(settings.max_parallel_calls)
+        logger.info(
+            "Audit %s started — %d providers, carrier=%s, voice=%s, parallelism=%d",
+            audit_id, len(providers), carrier, voice_mode, settings.max_parallel_calls,
+        )
 
         async def one(p: Provider) -> CallResult:
             async with sem:
                 r = await voice.call_provider(p, carrier_hint=carrier)
+                logger.info(
+                    "Audit %s | NPI %s (%s) → %s%s",
+                    audit_id, p.npi, p.name, r.status,
+                    f" [{r.ghost_reason}]" if r.ghost_reason else "",
+                )
                 await record_call(settings, r)
                 return r
 
@@ -93,8 +102,14 @@ async def run_audit_pipeline(
             await push()
 
         state.status = "completed"
+        logger.info(
+            "Audit %s completed — %d calls, ghost_rate=%.1f%%, complaint_eligible=%s",
+            audit_id, len(state.results), _ghost_rate(state) * 100,
+            _ghost_rate(state) >= 0.70,
+        )
         await push()
     except Exception as e:  # noqa: BLE001
+        logger.exception("Audit pipeline failed for audit_id=%s", audit_id)
         state.status = "failed"
         state.error = str(e)
         await store.save(state)

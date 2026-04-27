@@ -12,7 +12,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    voice_provider: Literal["mock", "retell"] = "mock"
+    voice_provider: Literal["mock", "retell", "pipecat"] = "mock"
     retell_api_key: str | None = None
     retell_agent_id: str | None = None
     twilio_account_sid: str | None = None
@@ -27,6 +27,16 @@ class Settings(BaseSettings):
     gcs_audits_prefix: str = "audits/"
     gcs_memory_bucket: str | None = None
     gcs_memory_prefix: str = "npi_memory/"
+
+    # Vertex AI (used for Gemini LLM — complaint draft + Pipecat pipeline)
+    vertex_location: str = "us-central1"   # Vertex AI region
+
+    # Pipecat / open-source voice (used when VOICE_PROVIDER=pipecat)
+    public_url: str | None = None          # ngrok or Cloud Run URL, no trailing slash
+    deepgram_api_key: str | None = None    # free 10K min/month at deepgram.com
+    # Cost guard: pipecat audits with more providers than this are rejected unless
+    # the request includes "override_cost_guard": true. Set to 0 to disable.
+    pipecat_cost_guard: int = Field(default=5, ge=0)
 
     # Local persistence (relative to repo root unless absolute)
     audit_local_dir: str | None = "data/audits"
