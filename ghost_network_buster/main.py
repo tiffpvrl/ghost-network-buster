@@ -43,11 +43,14 @@ from ghost_network_buster.tools.voice_provider import (
 # ---------------------------------------------------------------------------
 try:
     from pipecat.audio.vad.silero import SileroVADAnalyzer
+    from pipecat.audio.vad.vad_analyzer import VADParams
     from pipecat.pipeline.pipeline import Pipeline
     from pipecat.pipeline.runner import PipelineRunner
     from pipecat.pipeline.task import PipelineParams, PipelineTask
     from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
     from pipecat.frames.frames import (
+        BotStartedSpeakingFrame,
+        BotStoppedSpeakingFrame,
         EndFrame,
         InterimTranscriptionFrame,
         LLMTextFrame,
@@ -98,12 +101,67 @@ def _agent_debug_log(location: str, message: str, data: dict[str, Any], hypothes
 # endregion
 
 
+async def _seed_demo_state(store: AuditStore) -> None:
+    """Pre-populate the demo audit so download endpoints work immediately on startup."""
+    from ghost_network_buster.models import AuditState, CallResult as CR  # noqa: PLC0415
+
+    results = [
+        CR(npi="1234567890", phone="212-555-0101", status="ghost", ghost_reason="disconnected",
+           provider_name="Dr. Sarah Chen, LCSW", specialty="Anxiety, Trauma",
+           transcript="Agent: Hi, I'm calling to verify if Dr. Sarah Chen accepts Aetna insurance and is accepting new patients for anxiety and trauma therapy.\n[Automated message: The number you have dialed has been disconnected or is no longer in service.]\nAgent: Logging result — disconnected number.",
+           summary="Number disconnected. Provider unreachable.", verified_at="2026-05-02T10:01:00Z"),
+        CR(npi="1234567891", phone="212-555-0102", status="ghost", ghost_reason="wrong_network",
+           provider_name="Dr. Marcus Webb, PhD", specialty="CBT, Depression",
+           transcript="Agent: Hi, I'm calling to verify whether Dr. Webb accepts Aetna insurance for outpatient therapy.\nReceptionist: Dr. Webb dropped Aetna back in 2023. He's cash-pay only now.\nAgent: Is he planning to rejoin any networks?\nReceptionist: No, I don't believe so.",
+           summary="No longer in Aetna network since 2023.", verified_at="2026-05-02T10:02:30Z"),
+        CR(npi="1234567892", phone="212-555-0103", status="ghost", ghost_reason="not_accepting_patients",
+           provider_name="East Side Wellness Center", specialty="General Therapy",
+           transcript="Agent: Good afternoon. I'm calling to confirm if you're accepting new Aetna patients for anxiety and trauma therapy.\nReceptionist: We're completely full. The waitlist has been closed since February — we don't know when we'll reopen it.\nAgent: Can you give any estimate on timeline?\nReceptionist: Honestly, no. I'd suggest looking elsewhere.",
+           summary="Closed waitlist since February, no timeline to reopen.", verified_at="2026-05-02T10:04:00Z"),
+        CR(npi="1234567893", phone="212-555-0104", status="real", ghost_reason=None,
+           provider_name="Dr. Linda Okafor, LMFT", specialty="Trauma-Informed CBT",
+           transcript="Agent: Hi, I'm calling to verify if Dr. Okafor is accepting new Aetna patients for anxiety and trauma therapy.\nReceptionist: Yes! Dr. Okafor is in-network with Aetna and we do have availability. She specializes in trauma-informed CBT.\nAgent: Can you confirm she's currently accepting new patients?\nReceptionist: Absolutely — openings as early as next week.",
+           summary="Confirmed in-network, accepting new patients. Openings next week.", verified_at="2026-05-02T10:05:30Z"),
+        CR(npi="1234567894", phone="212-555-0105", status="ghost", ghost_reason="wrong_provider",
+           provider_name="Dr. James Ostrowski, PsyD", specialty="Behavioral Health",
+           transcript="Agent: Hi, I'm trying to reach Dr. James Ostrowski at Midtown Behavioral Health.\nReceptionist: Dr. Ostrowski hasn't practiced here in over two years. We don't know where he relocated.\nAgent: Is there another Aetna-network therapist at this location?\nReceptionist: We don't have any Aetna providers on staff.",
+           summary="Provider left practice 2+ years ago. Location has no Aetna coverage.", verified_at="2026-05-02T10:07:00Z"),
+        CR(npi="1234567895", phone="212-555-0106", status="ghost", ghost_reason="no_behavioral_health",
+           provider_name="Dr. Patricia Gonzalez, MD", specialty="Listed: Behavioral Health",
+           transcript="Agent: I'm calling to confirm if Dr. Gonzalez provides behavioral health services and accepts Aetna for therapy.\nReceptionist: Dr. Gonzalez is an orthopedic surgeon. We don't offer any mental health services here.\nAgent: She's listed in Aetna's behavioral health directory — is that an error?\nReceptionist: That has to be a mistake. This is a surgical practice.",
+           summary="Orthopedic surgeon, no behavioral health services. Directory listing is erroneous.", verified_at="2026-05-02T10:08:30Z"),
+        CR(npi="1234567896", phone="212-555-0107", status="ghost", ghost_reason="retired",
+           provider_name="Dr. Kevin Park, LCSW", specialty="Anxiety, PTSD",
+           transcript="Agent: Good morning. I'm verifying whether Dr. Park is currently seeing patients and accepting Aetna for mental health therapy.\nReceptionist: Dr. Park retired in early 2024. This line is forwarded to billing only.\nAgent: Is there another provider at this location?\nReceptionist: The practice is closed. We're only handling final billing.",
+           summary="Retired 2024. Practice closed.", verified_at="2026-05-02T10:10:00Z"),
+        CR(npi="1234567897", phone="718-555-0108", status="real", ghost_reason=None,
+           provider_name="Brooklyn Mind Collective", specialty="Anxiety, Trauma / PTSD",
+           transcript="Agent: Hi, calling to confirm whether Brooklyn Mind Collective is accepting new Aetna patients for anxiety and trauma-focused therapy.\nReceptionist: Yes, we are! We have three therapists in-network with Aetna who specialize in anxiety and PTSD.\nAgent: Are they currently taking new patients?\nReceptionist: Two of them are — we can get someone in within two weeks.",
+           summary="Confirmed in-network. 2 of 3 therapists accepting. Available within 2 weeks.", verified_at="2026-05-02T10:11:30Z"),
+    ]
+    state = AuditState(
+        audit_id="demo",
+        status="completed",
+        providers_total=8,
+        calls_completed=8,
+        results=results,
+        carrier="Aetna",
+        zip_code="10001",
+        care_needs=["Anxiety", "Trauma / PTSD"],
+    )
+    store.cache_put(state)
+    await store.save(state)
+    logger.info("Demo audit state seeded (audit_id=demo)")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     app.state.settings = settings
-    app.state.store = AuditStore(settings)
+    store = AuditStore(settings)
+    app.state.store = store
     app.state.ws = WsHub()
+    await _seed_demo_state(store)
     yield
 
 
@@ -261,6 +319,45 @@ async def voice_info(settings: Settings = Depends(get_settings)) -> dict[str, ob
 async def agents_graph() -> dict[str, Any]:
     root = build_audit_agent_blueprint()
     return {"blueprint": agent_tree_to_dict(root)}
+
+
+class ClassifyRequest(BaseModel):
+    transcript: str
+    carrier: str = "Aetna"
+
+
+@app.post("/api/agents/classify", dependencies=[Depends(_require_demo_key)])
+async def agents_classify(
+    body: ClassifyRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    """Run the ADK classifier agent on a transcript via the ADK Runner."""
+    import json as _json
+    import re as _re
+
+    from ghost_network_buster.adk_blueprint import run_agent_async
+
+    if not settings.google_cloud_project:
+        raise HTTPException(status_code=503, detail="GOOGLE_CLOUD_PROJECT not configured")
+
+    blueprint = build_audit_agent_blueprint()
+    classifier = next(a for a in blueprint.sub_agents if a.name == "classifier_agent")
+
+    message = _json.dumps({"transcript": body.transcript, "carrier": body.carrier})
+    raw = await run_agent_async(
+        classifier,
+        message,
+        project=settings.google_cloud_project,
+        location=settings.vertex_location,
+    )
+
+    try:
+        cleaned = _re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=_re.MULTILINE).strip()
+        result: Any = _json.loads(cleaned)
+    except Exception:
+        result = {"raw": raw}
+
+    return {"adk_result": result, "agent": "classifier_agent"}
 
 
 @app.post("/api/start-audit", dependencies=[Depends(_require_demo_key)])
@@ -608,50 +705,83 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                     location=settings.vertex_location,
                 )
                 self._history: list = []
+                self._bot_speaking: bool = False
+                self._llm_in_progress: bool = False
 
             async def process_frame(self, frame, direction: FrameDirection):  # type: ignore[override]
                 await super().process_frame(frame, direction)
-                if isinstance(frame, TranscriptionFrame) and frame.text.strip():
-                    raw = frame.text.strip()
+                # Bug 1: track when the bot is speaking so we ignore STT echo.
+                if isinstance(frame, BotStartedSpeakingFrame):
+                    self._bot_speaking = True
                     await self.push_frame(frame, direction)
-                    if _looks_like_ivr_or_menu_stt(raw) or _short_digit_menu_noise(raw):
-                        logger.info(
-                            "Pipecat: IVR/menu-like STT (%d chars), canned clarification — %r",
-                            len(raw),
-                            raw[:160],
-                        )
-                        canned = (
-                            f"Sorry, I didn't catch that clearly — does your practice accept "
-                            f"{carrier_hint} for behavioral health, and are you taking new patients?"
-                        )
-                        await self.push_frame(LLMFullResponseStartFrame())
-                        await self.push_frame(LLMTextFrame(text=canned))
-                        await self.push_frame(LLMFullResponseEndFrame())
-                        return
-                    self._history.append({"role": "user", "parts": [{"text": raw}]})
-                    await self.push_frame(LLMFullResponseStartFrame())
-                    resp = await asyncio.to_thread(
-                        self._client.models.generate_content,
-                        model="gemini-2.0-flash",
-                        contents=self._history,
-                        config={"system_instruction": system_prompt},
+                    return
+                if isinstance(frame, BotStoppedSpeakingFrame):
+                    self._bot_speaking = False
+                    await self.push_frame(frame, direction)
+                    return
+                if isinstance(frame, TranscriptionFrame):
+                    logger.info(
+                        "STT TranscriptionFrame: bot_speaking=%s llm_in_progress=%s empty=%s text=%r",
+                        self._bot_speaking,
+                        self._llm_in_progress,
+                        not frame.text.strip(),
+                        frame.text.strip()[:200],
                     )
-                    reply = (resp.text or "").strip()
-                    if not reply:
-                        logger.warning(
-                            "Pipecat: Gemini returned empty reply; using fallback (user STT %r)",
-                            raw[:120],
+                if isinstance(frame, TranscriptionFrame) and frame.text.strip():
+                    # Bug 1: drop STT frames while the bot's own TTS is playing.
+                    if self._bot_speaking:
+                        return
+                    # Bug 2: set the in-progress flag synchronously before any await so
+                    # concurrent frames that arrive while we yield cannot slip through.
+                    # (asyncio.Lock.locked() check + async-with had a TOCTOU window.)
+                    if self._llm_in_progress:
+                        return
+                    self._llm_in_progress = True  # no await between check and set — atomic
+                    try:
+                        raw = frame.text.strip()
+                        await self.push_frame(frame, direction)
+                        if _looks_like_ivr_or_menu_stt(raw) or _short_digit_menu_noise(raw):
+                            logger.info(
+                                "Pipecat: IVR/menu-like STT (%d chars), canned clarification — %r",
+                                len(raw),
+                                raw[:160],
+                            )
+                            canned = (
+                                f"Sorry, I didn't catch that clearly — does your practice accept "
+                                f"{carrier_hint} for behavioral health, and are you taking new patients?"
+                            )
+                            await self.push_frame(LLMFullResponseStartFrame())
+                            await self.push_frame(LLMTextFrame(text=canned))
+                            await self.push_frame(LLMFullResponseEndFrame())
+                            return
+                        self._history.append({"role": "user", "parts": [{"text": raw}]})
+                        await self.push_frame(LLMFullResponseStartFrame())
+                        # Bug 3: use the async API directly instead of asyncio.to_thread.
+                        resp = await self._client.aio.models.generate_content(
+                            model="gemini-2.0-flash-lite",
+                            contents=self._history,
+                            config={"system_instruction": system_prompt},
                         )
-                        reply = (
-                            f"I didn't quite hear that — do you accept {carrier_hint} "
-                            "for behavioral health and are you accepting new patients?"
-                        )
-                    self._history.append({"role": "model", "parts": [{"text": reply}]})
-                    await self.push_frame(LLMTextFrame(text=reply))
-                    await self.push_frame(LLMFullResponseEndFrame())
-                    farewell_phrases = ("have a great day", "goodbye", "take care", "bye")
-                    if reply and any(p in reply.lower() for p in farewell_phrases):
-                        await self.push_frame(EndFrame())
+                        reply = (resp.text or "").strip()
+                        if not reply:
+                            logger.warning(
+                                "Pipecat: Gemini returned empty reply; using fallback (user STT %r)",
+                                raw[:120],
+                            )
+                            reply = (
+                                f"I didn't quite hear that — do you accept {carrier_hint} "
+                                "for behavioral health and are you accepting new patients?"
+                            )
+                        self._history.append({"role": "model", "parts": [{"text": reply}]})
+                        await self.push_frame(LLMTextFrame(text=reply))
+                        await self.push_frame(LLMFullResponseEndFrame())
+                        farewell_phrases = ("have a great day", "goodbye", "take care", "bye")
+                        has_farewell = any(p in reply.lower() for p in farewell_phrases)
+                        # Don't hang up if Gemini is still asking a question in the same reply.
+                        if reply and has_farewell and "?" not in reply:
+                            await self.push_frame(EndFrame())
+                    finally:
+                        self._llm_in_progress = False
                 else:
                     await self.push_frame(frame, direction)
 
@@ -669,7 +799,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                 serializer=serializer,
             ),
         )
-        vad = VADProcessor(vad_analyzer=SileroVADAnalyzer())
+        vad = VADProcessor(vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.2)))
         endpointing_opt: Any = (
             False if settings.deepgram_stt_endpointing_ms == 0 else settings.deepgram_stt_endpointing_ms
         )
@@ -681,6 +811,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                 language=settings.deepgram_stt_language,
                 smart_format=settings.deepgram_stt_smart_format,
                 interim_results=settings.deepgram_stt_interim_results,
+                utterance_end_ms=settings.deepgram_stt_utterance_end_ms,
                 endpointing=endpointing_opt,
             ),
         )
@@ -823,6 +954,61 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
             verified_at=ts,
         )
         _resolve(result)
+
+
+@app.post("/api/seed-demo")
+async def seed_demo(request: Request, settings: Settings = Depends(get_settings)) -> dict[str, object]:
+    """Seed a fixed 'demo' audit into the store so download endpoints work during demo replay."""
+    from ghost_network_buster.models import AuditState, CallResult as CR  # noqa: PLC0415
+
+    results = [
+        CR(npi="1234567890", phone="212-555-0101", status="ghost", ghost_reason="disconnected",
+           provider_name="Dr. Sarah Chen, LCSW", specialty="Anxiety, Trauma",
+           transcript="Agent: Hi, I'm calling to verify if Dr. Sarah Chen accepts Aetna insurance and is accepting new patients for anxiety and trauma therapy.\n[Automated message: The number you have dialed has been disconnected or is no longer in service.]\nAgent: Logging result — disconnected number.",
+           summary="Number disconnected. Provider unreachable.", verified_at="2026-05-02T10:01:00Z"),
+        CR(npi="1234567891", phone="212-555-0102", status="ghost", ghost_reason="wrong_network",
+           provider_name="Dr. Marcus Webb, PhD", specialty="CBT, Depression",
+           transcript="Agent: Hi, I'm calling to verify whether Dr. Webb accepts Aetna insurance for outpatient therapy.\nReceptionist: Dr. Webb dropped Aetna back in 2023. He's cash-pay only now.\nAgent: Is he planning to rejoin any networks?\nReceptionist: No, I don't believe so.",
+           summary="No longer in Aetna network since 2023.", verified_at="2026-05-02T10:02:30Z"),
+        CR(npi="1234567892", phone="212-555-0103", status="ghost", ghost_reason="not_accepting_patients",
+           provider_name="East Side Wellness Center", specialty="General Therapy",
+           transcript="Agent: Good afternoon. I'm calling to confirm if you're accepting new Aetna patients for anxiety and trauma therapy.\nReceptionist: We're completely full. The waitlist has been closed since February — we don't know when we'll reopen it.\nAgent: Can you give any estimate on timeline?\nReceptionist: Honestly, no. I'd suggest looking elsewhere.",
+           summary="Closed waitlist since February, no timeline to reopen.", verified_at="2026-05-02T10:04:00Z"),
+        CR(npi="1234567893", phone="212-555-0104", status="real", ghost_reason=None,
+           provider_name="Dr. Linda Okafor, LMFT", specialty="Trauma-Informed CBT",
+           transcript="Agent: Hi, I'm calling to verify if Dr. Okafor is accepting new Aetna patients for anxiety and trauma therapy.\nReceptionist: Yes! Dr. Okafor is in-network with Aetna and we do have availability. She specializes in trauma-informed CBT.\nAgent: Can you confirm she's currently accepting new patients?\nReceptionist: Absolutely — openings as early as next week.",
+           summary="Confirmed in-network, accepting new patients. Openings next week.", verified_at="2026-05-02T10:05:30Z"),
+        CR(npi="1234567894", phone="212-555-0105", status="ghost", ghost_reason="wrong_provider",
+           provider_name="Dr. James Ostrowski, PsyD", specialty="Behavioral Health",
+           transcript="Agent: Hi, I'm trying to reach Dr. James Ostrowski at Midtown Behavioral Health.\nReceptionist: Dr. Ostrowski hasn't practiced here in over two years. We don't know where he relocated.\nAgent: Is there another Aetna-network therapist at this location?\nReceptionist: We don't have any Aetna providers on staff.",
+           summary="Provider left practice 2+ years ago. Location has no Aetna coverage.", verified_at="2026-05-02T10:07:00Z"),
+        CR(npi="1234567895", phone="212-555-0106", status="ghost", ghost_reason="no_behavioral_health",
+           provider_name="Dr. Patricia Gonzalez, MD", specialty="Listed: Behavioral Health",
+           transcript="Agent: I'm calling to confirm if Dr. Gonzalez provides behavioral health services and accepts Aetna for therapy.\nReceptionist: Dr. Gonzalez is an orthopedic surgeon. We don't offer any mental health services here.\nAgent: She's listed in Aetna's behavioral health directory — is that an error?\nReceptionist: That has to be a mistake. This is a surgical practice.",
+           summary="Orthopedic surgeon, no behavioral health services. Directory listing is erroneous.", verified_at="2026-05-02T10:08:30Z"),
+        CR(npi="1234567896", phone="212-555-0107", status="ghost", ghost_reason="retired",
+           provider_name="Dr. Kevin Park, LCSW", specialty="Anxiety, PTSD",
+           transcript="Agent: Good morning. I'm verifying whether Dr. Park is currently seeing patients and accepting Aetna for mental health therapy.\nReceptionist: Dr. Park retired in early 2024. This line is forwarded to billing only.\nAgent: Is there another provider at this location?\nReceptionist: The practice is closed. We're only handling final billing.",
+           summary="Retired 2024. Practice closed.", verified_at="2026-05-02T10:10:00Z"),
+        CR(npi="1234567897", phone="718-555-0108", status="real", ghost_reason=None,
+           provider_name="Brooklyn Mind Collective", specialty="Anxiety, Trauma / PTSD",
+           transcript="Agent: Hi, calling to confirm whether Brooklyn Mind Collective is accepting new Aetna patients for anxiety and trauma-focused therapy.\nReceptionist: Yes, we are! We have three therapists in-network with Aetna who specialize in anxiety and PTSD.\nAgent: Are they currently taking new patients?\nReceptionist: Two of them are — we can get someone in within two weeks.",
+           summary="Confirmed in-network. 2 of 3 therapists accepting. Available within 2 weeks.", verified_at="2026-05-02T10:11:30Z"),
+    ]
+    state = AuditState(
+        audit_id="demo",
+        status="completed",
+        providers_total=8,
+        calls_completed=8,
+        results=results,
+        carrier="Aetna",
+        zip_code="10001",
+        care_needs=["Anxiety", "Trauma / PTSD"],
+    )
+    store: AuditStore = _get_store(request)
+    store.cache_put(state)
+    await store.save(state)
+    return {"seeded": True, "audit_id": "demo"}
 
 
 @app.get("/api/employer/mock-dashboard", dependencies=[Depends(_require_demo_key)])
