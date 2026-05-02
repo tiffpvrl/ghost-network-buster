@@ -1,6 +1,6 @@
 # Ghost Network Buster (capstone)
 
-Multi-agent insurer directory audit: **Google ADK blueprint**, FastAPI pipeline, **mock or Retell** voice, **local TF-IDF RAG** over bundled regulatory snippets, **GCS/local persistence**, **WebSocket** live summaries, PDF deliverables.
+Multi-agent insurer directory audit: **Google ADK blueprint**, FastAPI pipeline, **mock or Pipecat/Twilio** voice, **local TF-IDF RAG** over bundled regulatory snippets, **GCS/local persistence**, **WebSocket** live summaries, PDF deliverables.
 
 ## Class concepts → code
 
@@ -52,6 +52,17 @@ If `DEMO_API_KEY` is set on the API, set `VITE_DEMO_API_KEY` in `frontend/.env`.
 pytest tests/ -q
 ```
 
+### Pipecat + Deepgram (one-call smoke test)
+
+Use this to verify **Twilio media streams**, **Deepgram STT/TTS**, and **Gemini** in the live pipeline.
+
+1. Install voice extras: `uv pip install -e ".[pipecat]"` (or `pip install -e ".[pipecat]"`).
+2. In `.env`: `VOICE_PROVIDER=pipecat`, `MAX_PARALLEL_CALLS=1`, `PUBLIC_URL=<https ngrok or deployed URL>`, plus Twilio, `DEEPGRAM_API_KEY`, `GOOGLE_CLOUD_PROJECT`, and optional Deepgram tuning vars (`DEEPGRAM_STT_*`, `DEEPGRAM_TTS_*`) as in `.env.example`.
+3. Run the API and start a single-provider audit from the UI or `POST /api/start-audit` with `max_providers: 1`.
+4. **Expected logs** when the callee answers: NDJSON `twilio_audio_ws:deepgram_init` (STT model / TTS voice), then `AudioDebugLogger: first audio chunk call_id=...` with PCM from Deepgram TTS (Twilio still receives 8 kHz µ-law after resampling).
+
+If Deepgram logs **`HTTP 400` / `Unexpected error when initializing websocket connection`**, check **`DEEPGRAM_STT_MODEL`** — use a full model id (e.g. `nova-3-general`, `nova-2-general`), confirm **`DEEPGRAM_API_KEY`** is valid in [Deepgram Console](https://console.deepgram.com/), and ensure **`DEEPGRAM_STT_SAMPLE_RATE=8000`** matches Twilio’s stream.
+
 ## GCP / Cloud Run
 
 1. **Container**: `docker build -t gnb-api .` then push to Artifact Registry, or `gcloud run deploy --source .`.
@@ -72,6 +83,3 @@ pytest tests/ -q
 - `WS /ws/audit/{id}?demo_key=...` — push `{type:"summary", data: ...}` after each batch update.
 - PDFs: `GET /api/download/summary/{id}`, `GET /api/download/complaint/{id}` (complaint if ghost rate ≥ 70%).
 
-## Retell later
-
-Set `VOICE_PROVIDER=retell`, `RETELL_API_KEY`, `RETELL_AGENT_ID`. Add webhooks for transcripts; see `tools/voice_provider.py`.

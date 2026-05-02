@@ -1,1 +1,1 @@
-"""Tools: voice (mock / Retell placeholder), later RAG, memory, etc."""
+"""Tools: voice (mock / Pipecat), RAG, memory, etc."""

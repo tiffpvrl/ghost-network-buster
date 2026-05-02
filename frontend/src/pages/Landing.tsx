@@ -55,7 +55,7 @@ export default function Landing() {
       <h1>Find real therapists. Expose ghost listings.</h1>
       <p className="lede">{subtitle}</p>
       <div className="banner">
-        <strong>Dev mode:</strong> voice is mocked (no Retell/Twilio charges). Sample NYC-style
+        <strong>Dev mode:</strong> voice is mocked (no Twilio charges). Sample NYC-style
         directory: 10 providers; ghost rate targets ~70% so the complaint draft unlocks.
       </div>
       <div className="grid grid-2">

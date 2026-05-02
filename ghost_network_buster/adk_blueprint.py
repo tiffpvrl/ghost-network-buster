@@ -45,7 +45,7 @@ def build_audit_agent_blueprint() -> BaseAgent:
     )
     fanout = ParallelAgent(
         name="parallel_caller_agent",
-        description="Fan out Retell/Twilio voice verification calls (bounded concurrency).",
+        description="Fan out Twilio/Pipecat voice verification calls (bounded concurrency).",
         sub_agents=[
             StageMarkerAgent(
                 name="caller_worker_a",

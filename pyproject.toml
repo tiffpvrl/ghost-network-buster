@@ -23,8 +23,7 @@ dependencies = [
 dev = ["pytest>=8.0.0", "ruff>=0.8.0"]
 vertex = ["google-cloud-aiplatform>=1.70.0"]
 pipecat = [
-    "pipecat-ai[twilio,google-ai,deepgram,silero]>=0.0.60",
-    "edge-tts>=7.0.0",
+    "pipecat-ai[deepgram,silero]>=0.0.60",
     "twilio>=9.0.0",
 ]
 
@@ -35,6 +34,10 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["ghost_network_buster*"]
+
+[tool.pytest.ini_options]
+# Lets `pytest` find `ghost_network_buster` when run from repo root without `pip install -e .`.
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100

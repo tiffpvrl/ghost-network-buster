@@ -75,231 +75,6 @@ def build_audit_summary_pdf(state: AuditState, summary: AuditSummary) -> bytes:
     return bytes(pdf.output(dest="S"))
 
 
-def _cell(pdf: FPDF, text: str, h: float = 5, bold: bool = False, size: int = 10) -> None:
-    """Write a line resetting x to left margin first."""
-    pdf.set_font("Helvetica", "B" if bold else "", size)
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(0, h, _ascii_pdf_text(text))
-
-
-def build_complaint_draft_pdf(
-    state: AuditState,
-    summary: AuditSummary,
-    rag_hits: list[dict[str, object]] | None = None,
-    gcp_project: str | None = None,
-    vertex_location: str = "us-central1",
-) -> bytes:
-    """Formal complaint letter draft for high ghost-rate audits (not legal advice)."""
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-
-    # --- Instructions block ---
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(0, 8, _ascii_pdf_text("Complaint Letter Draft — Behavioral Health Ghost Network"))
-    pdf.ln(1)
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(0, 4, _ascii_pdf_text(
-        "INSTRUCTIONS: Fill in all [BRACKETED] fields before sending. Choose one recipient "
-        "address below. This draft is not legal advice — review carefully and consult an "
-        "attorney if you have questions about your rights."
-    ))
-    pdf.ln(4)
-
-    # --- Date + patient info ---
-    _cell(pdf, "Date: [________________]")
-    pdf.ln(2)
-    _cell(pdf, "From:")
-    _cell(pdf, "  [YOUR FULL NAME]")
-    _cell(pdf, "  [STREET ADDRESS, CITY, STATE ZIP]")
-    _cell(pdf, "  [PHONE]  |  [EMAIL]")
-    _cell(pdf, f"  Member ID: [________________]   Plan: [________________]   Carrier: {state.carrier}")
-    pdf.ln(4)
-
-    # --- Recipient block ---
-    _cell(pdf, "Send to ONE of the following (choose based on your plan type):", bold=True)
-    pdf.ln(1)
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(0, 4, _ascii_pdf_text(
-        "Option A — NY Attorney General (recommended; strongest enforcement track record):"
-    ))
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(0, 4, _ascii_pdf_text(
-        "  Bureau of Consumer Frauds & Protection, 28 Liberty St, New York, NY 10005"
-        "  |  Online: ag.ny.gov/file-complaint  |  Phone: 1-800-771-7755"
-    ))
-    pdf.ln(2)
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(0, 4, _ascii_pdf_text(
-        "Option B — NY Dept. of Financial Services (DFS):"
-    ))
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(0, 4, _ascii_pdf_text(
-        "  Consumer Assistance Unit, One Commerce Plaza, Albany, NY 12257"
-        "  |  Online (preferred): myportal.dfs.ny.gov  |  Phone: 1-800-342-3736"
-    ))
-    pdf.ln(2)
-    pdf.set_font("Helvetica", "B", 9)
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(0, 4, _ascii_pdf_text(
-        "Option C — DOL/EBSA (use only for employer-sponsored/ERISA plans):"
-    ))
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(0, 4, _ascii_pdf_text(
-        "  Employee Benefits Security Administration  |  dol.gov/ebsa  |  1-866-275-7922"
-    ))
-    pdf.ln(4)
-
-    # --- Re: line ---
-    _cell(pdf, _ascii_pdf_text(
-        f"Re: Formal Complaint -- Inaccurate Behavioral Health Provider Directory, "
-        f"{state.carrier}, ZIP {state.zip_code}"
-    ), bold=True)
-    pdf.ln(3)
-
-    # --- Letter body (LLM or template fallback) ---
-    _template_legal = (
-        f"I am writing to file a formal complaint regarding the accuracy of {state.carrier}'s "
-        f"behavioral health provider directory for ZIP code {state.zip_code}. An independent "
-        f"AI-voice audit found that {summary.ghost_rate * 100:.0f}% of listed providers were "
-        f"ghost listings -- either unreachable or explicitly reporting they do not accept "
-        f"{state.carrier} for behavioral health services.\n\n"
-        f"This pattern constitutes potential violations of: (1) NY Insurance Law §3241, which "
-        f"requires insurers to maintain an adequate network meeting members' health needs -- a "
-        f"{summary.ghost_rate * 100:.0f}% ghost rate represents a fundamental failure of network "
-        f"adequacy; (2) NY Insurance Law §3217-a and §4324, which require accurate and current "
-        f"provider directory disclosure; (3) the federal Mental Health Parity and Addiction "
-        f"Equity Act (MHPAEA), under which an inaccessible behavioral health network constitutes "
-        f"a nonquantitative treatment limitation more restrictive than medical/surgical coverage; "
-        f"and (4) the No Surprises Act, which requires plans to verify and update provider "
-        f"directories every 90 days.\n\n"
-        f"I respectfully request that your office: (1) investigate {state.carrier}'s behavioral "
-        f"health provider directory accuracy in ZIP {state.zip_code}; (2) require {state.carrier} "
-        f"to correct all inaccurate listings and notify affected members; (3) assess whether the "
-        f"network meets adequacy standards under §3241 and MHPAEA; and (4) take appropriate "
-        f"enforcement action if violations are confirmed."
-    )
-
-    if gcp_project:
-        from ghost_network_buster.agents import complaint_agent  # noqa: PLC0415
-        llm_narrative = complaint_agent.generate_complaint_narrative(
-            state.carrier,
-            state.zip_code,
-            summary.ghost_rate,
-            [dict(h) for h in (rag_hits or [])],
-            gcp_project,
-            vertex_location,
-        )
-    else:
-        llm_narrative = ""
-
-    legal = llm_narrative if llm_narrative else _template_legal
-    for para in _ascii_pdf_text(legal).split("\n"):
-        pdf.set_x(pdf.l_margin)
-        pdf.multi_cell(0, 5, para.strip() if para.strip() else " ")
-        pdf.ln(1)
-    pdf.ln(2)
-
-    # --- Audit evidence ---
-    _cell(pdf, "Supporting Evidence: Audit Findings", bold=True)
-    pdf.ln(1)
-    for line in [
-        f"Carrier: {state.carrier}",
-        f"ZIP code: {state.zip_code}",
-        f"Providers audited: {summary.calls_completed}",
-        f"Ghost listings found: {summary.ghost_count} ({summary.ghost_rate * 100:.1f}%)",
-        "",
-        "Method: AI-voice verification calls asked each listed provider whether the practice "
-        "accepts the stated carrier for behavioral health and is accepting new patients. "
-        "Outcomes were logged with full transcripts.",
-        "",
-        "Representative ghost listing transcripts:",
-    ]:
-        safe = _ascii_pdf_text(line)
-        if not safe.strip():
-            pdf.ln(2)
-            continue
-        pdf.set_x(pdf.l_margin)
-        pdf.set_font("Helvetica", "", 10)
-        pdf.multi_cell(0, 5, safe)
-        pdf.ln(1)
-
-    for r in state.results:
-        if r.status != "ghost":
-            continue
-        excerpt = _ascii_pdf_text((r.transcript or "")[:300].replace("\n", " "))
-        pdf.set_font("Helvetica", "I", 9)
-        pdf.set_x(pdf.l_margin)
-        pdf.multi_cell(0, 4, _ascii_pdf_text(f"  - {r.provider_name or r.npi}: {excerpt}..."))
-        pdf.ln(1)
-
-    if summary.loop_agent_note:
-        pdf.ln(1)
-        _cell(pdf, "QA Note:", bold=True, size=9)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_x(pdf.l_margin)
-        pdf.multi_cell(0, 4, _ascii_pdf_text(summary.loop_agent_note))
-        pdf.ln(2)
-
-    # --- RAG excerpts ---
-    if rag_hits:
-        pdf.ln(1)
-        _cell(pdf, "Regulatory Reference Excerpts", bold=True)
-        pdf.ln(1)
-        pdf.set_font("Helvetica", "", 9)
-        for h in rag_hits:
-            src = str(h.get("source", ""))
-            ex = str(h.get("excerpt", ""))[:300]
-            pdf.set_x(pdf.l_margin)
-            pdf.multi_cell(0, 4, _ascii_pdf_text(f"[{src}] {ex}"))
-            pdf.ln(1)
-        pdf.ln(1)
-
-    # --- Signature block ---
-    pdf.ln(2)
-    pdf.set_font("Helvetica", "", 10)
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(0, 5, "Sincerely,")
-    pdf.ln(8)
-    _cell(pdf, "[YOUR SIGNATURE]")
-    _cell(pdf, "[YOUR PRINTED NAME]")
-    _cell(pdf, "Date: [________________]")
-    pdf.ln(4)
-
-    # --- Disclaimer ---
-    pdf.set_font("Helvetica", "I", 8)
-    pdf.set_x(pdf.l_margin)
-    pdf.multi_cell(0, 4, _ascii_pdf_text(
-        "DISCLAIMER: This letter was generated by an automated audit tool and is not legal advice. "
-        "Review and edit all content before filing. Attach your insurance card, relevant EOBs, "
-        "and any correspondence from your carrier. Consult a licensed attorney if you have "
-        "questions about your legal rights. For NY behavioral health access issues, contact the "
-        "CHAMP Ombudsman at 888-614-5400 (free, confidential)."
-    ))
-    return bytes(pdf.output(dest="S"))
-
-
-_LEGAL_CITATIONS = (
-    "Applicable legal standards include: (1) NY Insurance Law \u00a73241 (network adequacy mandate); "
-    "(2) NY Insurance Law \u00a73217-a / \u00a74324 (directory accuracy disclosure); "
-    "(3) MHPAEA 2024/2025 Final Rules on Non-Quantitative Treatment Limitations (NQTLs) \u2014 "
-    "inaccurate directories act as a discriminatory NQTL creating greater barriers to mental health "
-    "care than medical/surgical care; "
-    "(4) the Requiring Enhanced and Accurate Lists (REAL) Health Providers Act (H.R. 7148), under "
-    "which providers not verified within 90 days must be marked and removed within 5 business days; "
-    "(5) NY OAG v. EmblemHealth, Assurance of Discontinuance (Feb 2026) \u2014 the NY Attorney General "
-    "established that failure to maintain directory accuracy constitutes a violation of state parity "
-    "laws (Reference: Feb 2026 $2.5M settlement, ag.ny.gov/press-release/2026/emblemhealth-ghost-network-settlement)."
-)
-
-
 def _rag_source_label(src: str) -> str:
     if ":" in src:
         return src.split(":", 1)[1].strip()[:100]
@@ -406,11 +181,18 @@ def _failures_table(doc, ghosts: list, ghost_rate: float) -> None:
         row[0].text = r.provider_name or r.npi
         row[1].text = r.specialty or "\u2014"
         row[2].text = r.phone or "\u2014"
-        if r.ghost_reason == "disconnected":
-            result = "Disconnected / Not in Service"
-        elif r.ghost_reason == "wrong_network":
-            result = "Not in Network (Confirmed by Staff)"
-        else:
+        _reason_labels = {
+            "disconnected":           "Disconnected / Not in Service",
+            "wrong_network":          "Not in Network (Confirmed by Staff)",
+            "no_behavioral_health":   "Does Not Offer Behavioral Health Services",
+            "not_accepting_patients": "Not Accepting New Patients (Closed Panel)",
+            "wrong_provider":         "Wrong Provider at Listed Number",
+            "retired":                "Provider No Longer Practicing",
+            "wrong_specialty":        "Specialty Mismatch — Not Behavioral Health",
+            "referral_only":          "Referral Required (Undisclosed Access Barrier)",
+        }
+        result = _reason_labels.get(r.ghost_reason or "", None)
+        if result is None:
             result = r.ghost_reason.replace("_", " ").title() if r.ghost_reason else "Not Confirmed"
         row[3].text = result
         row[4].text = r.verified_at or "\u2014"
@@ -560,7 +342,18 @@ def build_complaint_draft_docx(
     doc.add_heading("Table of Verified Failures", level=3)
     _failures_table(doc, ghosts, summary.ghost_rate)
     doc.add_paragraph()
-    doc.add_paragraph(_LEGAL_CITATIONS)
+    doc.add_paragraph(
+        "Applicable legal standards include: (1) NY Insurance Law \u00a73241 (network adequacy mandate); "
+        "(2) NY Insurance Law \u00a73217-a / \u00a74324 (directory accuracy disclosure); "
+        "(3) MHPAEA 2024/2025 Final Rules on Non-Quantitative Treatment Limitations (NQTLs) \u2014 "
+        "inaccurate directories act as a discriminatory NQTL creating greater barriers to mental health "
+        "care than medical/surgical care; "
+        "(4) the Requiring Enhanced and Accurate Lists (REAL) Health Providers Act (H.R. 7148), under "
+        "which providers not verified within 90 days must be marked and removed within 5 business days; "
+        "(5) NY OAG v. EmblemHealth, Assurance of Discontinuance (Feb 2026) \u2014 the NY Attorney General "
+        "established that failure to maintain directory accuracy constitutes a violation of state parity "
+        "laws (Reference: Feb 2026 $2.5M settlement, ag.ny.gov/press-release/2026/emblemhealth-ghost-network-settlement)."
+    )
     doc.add_paragraph()
     doc.add_paragraph(
         f"I request that {carrier}: (1) correct all inaccurate listings within 10 business days; "
@@ -756,5 +549,3 @@ def build_complaint_draft_docx(
     bio = BytesIO()
     doc.save(bio)
     return bio.getvalue()
-
-

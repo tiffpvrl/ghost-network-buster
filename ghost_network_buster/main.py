@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -36,9 +37,65 @@ from ghost_network_buster.tools.voice_provider import (
     twilio_placeholder_note,
 )
 
+# ---------------------------------------------------------------------------
+# Pipecat imports — loaded at startup so the first call has no cold-start lag.
+# All wrapped in try/except; the server still works without the pipecat extra.
+# ---------------------------------------------------------------------------
+try:
+    from pipecat.audio.vad.silero import SileroVADAnalyzer
+    from pipecat.pipeline.pipeline import Pipeline
+    from pipecat.pipeline.runner import PipelineRunner
+    from pipecat.pipeline.task import PipelineParams, PipelineTask
+    from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
+    from pipecat.frames.frames import (
+        EndFrame,
+        InterimTranscriptionFrame,
+        LLMTextFrame,
+        OutputAudioRawFrame,
+        TranscriptionFrame,
+        LLMFullResponseEndFrame,
+        LLMFullResponseStartFrame,
+    )
+    from pipecat.services.deepgram.stt import DeepgramSTTService
+    from pipecat.services.deepgram.tts import DeepgramTTSService
+    from pipecat.transports.websocket.fastapi import (
+        FastAPIWebsocketTransport,
+        FastAPIWebsocketParams,
+    )
+    from pipecat.serializers.twilio import TwilioFrameSerializer
+    from pipecat.processors.audio.vad_processor import VADProcessor
+
+    _PIPECAT_AVAILABLE = True
+except ImportError:
+    _PIPECAT_AVAILABLE = False
+
 
 def _cors_origins(settings: Settings) -> list[str]:
     return [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+
+
+# region agent log
+def _agent_debug_log(location: str, message: str, data: dict[str, Any], hypothesis_id: str = "") -> None:
+    """Append one NDJSON line to debug-b6e268.log at repo root (no secrets/PII)."""
+
+    try:
+        import time
+
+        log_path = Path(__file__).resolve().parent.parent / "debug-b6e268.log"
+        payload = {
+            "sessionId": "b6e268",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data,
+            "timestamp": int(time.time() * 1000),
+        }
+        log_path.open("a", encoding="utf-8").write(json.dumps(payload) + "\n")
+    except Exception:
+        pass
+
+
+# endregion
 
 
 @asynccontextmanager
@@ -187,7 +244,6 @@ async def health() -> dict[str, str]:
 async def voice_info(settings: Settings = Depends(get_settings)) -> dict[str, object]:
     return {
         "voice_provider": settings.voice_provider,
-        "retell_configured": bool(settings.retell_api_key and settings.retell_agent_id),
         "twilio_env_present": bool(
             settings.twilio_account_sid and settings.twilio_auth_token and settings.twilio_from_number
         ),
@@ -238,9 +294,9 @@ async def start_audit(
         raise HTTPException(status_code=503, detail=str(e)) from e
 
     # Cost guard: block large pipecat batches to prevent accidental Twilio charges.
-    if settings.voice_provider == "pipecat" and settings.pipecat_cost_guard > 0:
-        if len(providers) > settings.pipecat_cost_guard and not body.override_cost_guard:
-            est = len(providers) * 0.75 * 0.014
+    if settings.voice_provider == "pipecat":
+        est = len(providers) * 0.75 * 0.014
+        if settings.pipecat_cost_guard > 0 and len(providers) > settings.pipecat_cost_guard and not body.override_cost_guard:
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -249,11 +305,7 @@ async def start_audit(
                     "Pass override_cost_guard=true to proceed, or reduce max_providers."
                 ),
             )
-
-    if settings.voice_provider == "pipecat":
-        est = len(providers) * 0.75 * 0.014
-        import logging as _log  # noqa: PLC0415
-        _log.getLogger(__name__).warning(
+        logger.warning(
             "PIPECAT AUDIT STARTING — %d real Twilio calls, est. $%.2f. "
             "Monitor at console.twilio.com.",
             len(providers),
@@ -394,9 +446,9 @@ async def twilio_answer(call_id: str, settings: Settings = Depends(get_settings)
 
 
 @app.websocket("/ws/twilio-audio/{call_id}")
-async def twilio_audio_ws(websocket: WebSocket, call_id: str, request: Request) -> None:
+async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
     """
-    Pipecat pipeline: Twilio audio stream → Deepgram STT → Gemini LLM → EdgeTTS → audio back.
+    Pipecat pipeline: Twilio audio stream → Deepgram STT → Gemini LLM → Deepgram TTS → audio back.
     Resolves the pending Future in pipecat_provider when the call ends.
     """
     from datetime import datetime, timezone  # noqa: PLC0415
@@ -412,7 +464,56 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str, request: Request) 
     provider = meta.get("provider")
     carrier_hint = meta.get("carrier_hint", "your insurance")
     future = _PENDING_CALLS.get(call_id)
-    settings: Settings = request.app.state.settings
+
+    def _looks_like_ivr_or_menu_stt(text: str) -> bool:
+        """Strong IVR / hold-menu phrases only — avoid substring false positives on real speech."""
+        s = text.strip().lower()
+        if len(s) < 2:
+            return True
+        # Phrase-level cues only (removed bare "seconds", "wireless", "goodbye", "extension", …).
+        needles = (
+            "press ",
+            "press,",
+            "pound key",
+            "star key",
+            "dial ",
+            "please hold",
+            "thank you for calling",
+            "your call is important",
+            "your call may be",
+            "you've reached",
+            "twilio trial",
+            "main menu",
+            "invalid option",
+            "for english",
+            "para español",
+            "listen closely",
+            "listen carefully",
+            "estimated wait",
+        )
+        return any(n in s for n in needles)
+
+    def _short_digit_menu_noise(text: str) -> bool:
+        """Spelled digits or digit-only lines from 'press 1' flows (not yes/no answers)."""
+        s = text.strip().lower()
+        if len(s) > 24:
+            return False
+        if s in {
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "zero",
+            "oh",
+        }:
+            return True
+        return bool(re.fullmatch(r"[\d\s\-\.\(\)]+", s)) and len(s) <= 14
+    settings: Settings = websocket.app.state.settings
     ts = datetime.now(timezone.utc).isoformat()
 
     def _resolve(result: CallResult) -> None:
@@ -420,42 +521,79 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str, request: Request) 
             future.set_result(result)
 
     try:
-        from pipecat.audio.vad.silero import SileroVADAnalyzer  # noqa: PLC0415
-        from pipecat.pipeline.pipeline import Pipeline  # noqa: PLC0415
-        from pipecat.pipeline.runner import PipelineRunner  # noqa: PLC0415
-        from pipecat.pipeline.task import PipelineParams, PipelineTask  # noqa: PLC0415
-        from pipecat.processors.frame_processor import FrameDirection, FrameProcessor  # noqa: PLC0415
-        from pipecat.frames.frames import (  # noqa: PLC0415
-            EndFrame,
-            LLMTextFrame,
-            TranscriptionFrame,
+        if not _PIPECAT_AVAILABLE:
+            raise ImportError("pipecat not installed")
+
+        # Pre-read the Twilio handshake messages to extract stream_sid and call_sid
+        # before the pipeline starts (TwilioFrameSerializer needs stream_sid upfront).
+        # This happens FIRST — before any heavy pipeline setup — so the pipeline is
+        # ready to speak as soon as Twilio sends the first audio frame.
+        stream_sid = ""
+        call_sid = ""
+        async for raw_msg in websocket.iter_text():
+            msg = json.loads(raw_msg)
+            if msg.get("event") == "connected":
+                continue
+            if msg.get("event") == "start":
+                stream_sid = msg.get("streamSid", "")
+                call_sid = msg.get("start", {}).get("callSid", "")
+                break
+        logger.info(
+            "Twilio stream ready call_id=%s stream_sid=%r call_sid=%r",
+            call_id, stream_sid, call_sid,
         )
-        from pipecat.services.deepgram import DeepgramSTTService  # noqa: PLC0415
-        from pipecat.services.edge_tts import EdgeTTSService  # noqa: PLC0415
-        from pipecat.transports.services.twilio import TwilioTransport, TwilioParams  # noqa: PLC0415
-        from pipecat.frames.frames import LLMFullResponseEndFrame, LLMFullResponseStartFrame  # noqa: PLC0415
+        _agent_debug_log(
+            "twilio_audio_ws:stream_ready",
+            "Twilio Media Stream start event received",
+            {"call_id": call_id, "has_stream_sid": bool(stream_sid), "tts": "deepgram"},
+            hypothesis_id="H5_stream",
+        )
 
         transcript_lines: list[str] = []
 
         class TranscriptCapture(FrameProcessor):
+            """Logs agent + provider lines for audits.
+
+            Deepgram emits InterimTranscriptionFrame while the caller speaks and TranscriptionFrame
+            when an utterance is final. If the call ends before a final, we would previously lose
+            provider text — we fold interim lines in and replace them with the final when it arrives.
+            """
+
             async def process_frame(self, frame, direction: FrameDirection):  # type: ignore[override]
                 await super().process_frame(frame, direction)
-                if isinstance(frame, TranscriptionFrame):
-                    transcript_lines.append(f"Provider: {frame.text}")
+                if isinstance(frame, InterimTranscriptionFrame):
+                    partial = frame.text.strip()
+                    if partial:
+                        marked = f"Provider: {partial} [partial]"
+                        if transcript_lines and transcript_lines[-1].endswith(" [partial]"):
+                            transcript_lines[-1] = marked
+                        else:
+                            transcript_lines.append(marked)
+                elif isinstance(frame, TranscriptionFrame):
+                    final_txt = frame.text.strip()
+                    if final_txt:
+                        final_line = f"Provider: {final_txt}"
+                        if transcript_lines and transcript_lines[-1].endswith(" [partial]"):
+                            transcript_lines[-1] = final_line
+                        else:
+                            transcript_lines.append(final_line)
                 elif isinstance(frame, LLMTextFrame):
                     transcript_lines.append(f"Agent: {frame.text}")
                 await self.push_frame(frame, direction)
 
         provider_name = provider.name if provider else "the practice"
         system_prompt = (
-            f"You are a healthcare directory verification assistant calling {provider_name}. "
-            f"Your only goal is to verify whether the practice currently accepts {carrier_hint} "
-            "insurance for behavioral health services and is accepting new patients. "
-            f"When someone answers, greet them and ask: 'Hi, I'm confirming directory "
-            f"information — does your practice accept {carrier_hint} insurance for behavioral "
-            "health, and are you currently accepting new patients?' "
-            "After you receive a clear answer (yes or no), say 'Thank you so much, have a great day!' "
-            "and end the conversation. Keep the call under 90 seconds."
+            f"You are a healthcare directory verification assistant on a live phone call with {provider_name}. "
+            f"A recorded introduction was already played at the start of this call — do NOT repeat it, "
+            f"do NOT say you are calling on behalf of a new patient again unless they ask who is calling. "
+            f"Your goal is to verify whether the practice accepts {carrier_hint} for behavioral health "
+            "and is accepting new patients. "
+            "Reply in at most two short sentences. Stay on topic; do not invent appointments, doctors, or addresses. "
+            "When the provider answers your question, acknowledge briefly (e.g. yes/no/clarifying question), "
+            "then if you have a clear answer say 'Thank you so much, have a great day!' and stop. "
+            "If their reply is unclear or sounds like a phone menu, ask one short clarifying question — "
+            f"without repeating the long introduction — about {carrier_hint} and new patients. "
+            "If asked, say honestly that you are an AI assistant. Keep the call under 90 seconds."
         )
 
         class _VertexLLMProcessor(FrameProcessor):
@@ -474,9 +612,23 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str, request: Request) 
             async def process_frame(self, frame, direction: FrameDirection):  # type: ignore[override]
                 await super().process_frame(frame, direction)
                 if isinstance(frame, TranscriptionFrame) and frame.text.strip():
-                    self._history.append({"role": "user", "parts": [{"text": frame.text}]})
-                    # Push the transcription frame so TranscriptCapture records provider speech.
+                    raw = frame.text.strip()
                     await self.push_frame(frame, direction)
+                    if _looks_like_ivr_or_menu_stt(raw) or _short_digit_menu_noise(raw):
+                        logger.info(
+                            "Pipecat: IVR/menu-like STT (%d chars), canned clarification — %r",
+                            len(raw),
+                            raw[:160],
+                        )
+                        canned = (
+                            f"Sorry, I didn't catch that clearly — does your practice accept "
+                            f"{carrier_hint} for behavioral health, and are you taking new patients?"
+                        )
+                        await self.push_frame(LLMFullResponseStartFrame())
+                        await self.push_frame(LLMTextFrame(text=canned))
+                        await self.push_frame(LLMFullResponseEndFrame())
+                        return
+                    self._history.append({"role": "user", "parts": [{"text": raw}]})
                     await self.push_frame(LLMFullResponseStartFrame())
                     resp = await asyncio.to_thread(
                         self._client.models.generate_content,
@@ -485,33 +637,131 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str, request: Request) 
                         config={"system_instruction": system_prompt},
                     )
                     reply = (resp.text or "").strip()
-                    if reply:
-                        self._history.append({"role": "model", "parts": [{"text": reply}]})
-                        await self.push_frame(LLMTextFrame(text=reply))
+                    if not reply:
+                        logger.warning(
+                            "Pipecat: Gemini returned empty reply; using fallback (user STT %r)",
+                            raw[:120],
+                        )
+                        reply = (
+                            f"I didn't quite hear that — do you accept {carrier_hint} "
+                            "for behavioral health and are you accepting new patients?"
+                        )
+                    self._history.append({"role": "model", "parts": [{"text": reply}]})
+                    await self.push_frame(LLMTextFrame(text=reply))
                     await self.push_frame(LLMFullResponseEndFrame())
+                    farewell_phrases = ("have a great day", "goodbye", "take care", "bye")
+                    if reply and any(p in reply.lower() for p in farewell_phrases):
+                        await self.push_frame(EndFrame())
                 else:
                     await self.push_frame(frame, direction)
 
-        transport = TwilioTransport(
-            websocket,
-            TwilioParams(audio_in_enabled=True, audio_out_enabled=True, vad_analyzer=SileroVADAnalyzer()),
+        serializer = TwilioFrameSerializer(
+            stream_sid=stream_sid,
+            call_sid=call_sid,
+            account_sid=settings.twilio_account_sid,
+            auth_token=settings.twilio_auth_token,
         )
-        stt = DeepgramSTTService(api_key=settings.deepgram_api_key or "")
+        transport = FastAPIWebsocketTransport(
+            websocket=websocket,
+            params=FastAPIWebsocketParams(
+                audio_in_enabled=True,
+                audio_out_enabled=True,
+                serializer=serializer,
+            ),
+        )
+        vad = VADProcessor(vad_analyzer=SileroVADAnalyzer())
+        endpointing_opt: Any = (
+            False if settings.deepgram_stt_endpointing_ms == 0 else settings.deepgram_stt_endpointing_ms
+        )
+        stt = DeepgramSTTService(
+            api_key=settings.deepgram_api_key or "",
+            sample_rate=settings.deepgram_stt_sample_rate,
+            settings=DeepgramSTTService.Settings(
+                model=settings.deepgram_stt_model,
+                language=settings.deepgram_stt_language,
+                smart_format=settings.deepgram_stt_smart_format,
+                interim_results=settings.deepgram_stt_interim_results,
+                endpointing=endpointing_opt,
+            ),
+        )
         llm = _VertexLLMProcessor()
-        tts = EdgeTTSService(voice="en-US-AriaNeural")
+        tts = DeepgramTTSService(
+            api_key=settings.deepgram_api_key or "",
+            voice=settings.deepgram_tts_voice,
+            sample_rate=settings.deepgram_tts_sample_rate,
+        )
+        _agent_debug_log(
+            "twilio_audio_ws:deepgram_init",
+            "Deepgram STT/TTS constructed",
+            {
+                "call_id": call_id,
+                "stt_model": settings.deepgram_stt_model,
+                "stt_sample_rate": settings.deepgram_stt_sample_rate,
+                "tts_voice": settings.deepgram_tts_voice,
+                "tts_sample_rate": settings.deepgram_tts_sample_rate,
+            },
+            hypothesis_id="H_deepgram",
+        )
         capture = TranscriptCapture()
+
+        _audio_chunks_sent = [0]
+
+        class AudioDebugLogger(FrameProcessor):
+            async def process_frame(self, frame, direction: FrameDirection):  # type: ignore[override]
+                await super().process_frame(frame, direction)
+                fn = type(frame).__name__
+                audio_len = len(frame.audio) if isinstance(frame, OutputAudioRawFrame) else None
+                sr = getattr(frame, "sample_rate", None) if isinstance(frame, OutputAudioRawFrame) else None
+                if isinstance(frame, OutputAudioRawFrame):
+                    _audio_chunks_sent[0] += 1
+                    if _audio_chunks_sent[0] <= 3:
+                        _agent_debug_log(
+                            "AudioDebugLogger:chunk",
+                            fn,
+                            {
+                                "call_id": call_id,
+                                "n": _audio_chunks_sent[0],
+                                "audio_len": audio_len,
+                                "sample_rate": sr,
+                            },
+                            hypothesis_id="H1_audio_frames",
+                        )
+                    if _audio_chunks_sent[0] == 1:
+                        logger.info(
+                            "AudioDebugLogger: first audio chunk call_id=%s bytes=%d sr=%d",
+                            call_id, len(frame.audio), frame.sample_rate,
+                        )
+                await self.push_frame(frame, direction)
+
+        audio_debug = AudioDebugLogger()
 
         pipeline = Pipeline(
             [
                 transport.input(),
+                vad,
                 stt,
                 llm,
-                tts,
                 capture,
+                tts,
+                audio_debug,
                 transport.output(),
             ]
         )
+        opening_line = (
+            f"Hi, I'm an AI assistant and this call is being recorded for directory accuracy purposes. "
+            f"I'm calling on behalf of a new patient looking for behavioral health care — "
+            f"does your practice currently accept {carrier_hint} insurance, and are you accepting new patients?"
+        )
+
         task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True))
+
+        @transport.event_handler("on_client_connected")
+        async def on_connect(_transport, _client):  # type: ignore[misc]
+            await task.queue_frames([
+                LLMFullResponseStartFrame(),
+                LLMTextFrame(text=opening_line),
+                LLMFullResponseEndFrame(),
+            ])
 
         @transport.event_handler("on_client_disconnected")
         async def on_disconnect(_transport, _client):  # type: ignore[misc]
@@ -525,7 +775,12 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str, request: Request) 
         npi = provider.npi if provider else call_id
         phone = provider.phone if provider else ""
         specialty = provider.specialty if provider else None
-        status, ghost_reason, summary_text = classify_transcript(full_transcript, carrier_hint=carrier_hint)
+        status, ghost_reason, summary_text = classify_transcript(
+            full_transcript,
+            carrier_hint=carrier_hint,
+            gcp_project=settings.google_cloud_project,
+            vertex_location=settings.vertex_location,
+        )
         logger.info(
             "Classifier call_id=%s → status=%s ghost_reason=%s",
             call_id, status, ghost_reason or "none",
@@ -545,8 +800,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str, request: Request) 
 
     except ImportError as exc:
         msg = f"Pipecat not installed: {exc}. Run: pip install -e '.[pipecat]'"
-        import logging  # noqa: PLC0415
-        logging.getLogger(__name__).error(msg)
+        logger.error(msg)
         result = CallResult(
             npi=provider.npi if provider else call_id,
             phone=provider.phone if provider else "",
@@ -558,8 +812,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str, request: Request) 
         )
         _resolve(result)
     except Exception as exc:
-        import logging  # noqa: PLC0415
-        logging.getLogger(__name__).exception("Pipecat pipeline error for call_id=%s", call_id)
+        logger.exception("Pipecat pipeline error for call_id=%s", call_id)
         result = CallResult(
             npi=provider.npi if provider else call_id,
             phone=provider.phone if provider else "",
