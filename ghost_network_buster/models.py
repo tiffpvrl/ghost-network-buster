@@ -26,7 +26,7 @@ class CallResult(BaseModel):
     verified_at: str | None = None
     audio_note: str | None = Field(
         default=None,
-        description="In mock mode: no recording; Retell mode would hold clip URL.",
+        description="In mock mode: no recording; live Pipecat/Twilio mode may hold a recording URL.",
     )
 
 
