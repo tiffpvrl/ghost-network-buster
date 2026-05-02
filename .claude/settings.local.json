@@ -30,7 +30,9 @@
       "Bash(curl -s http://localhost:8765/api/health)",
       "Bash(curl -s http://localhost:8765/api/voice/info)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
-      "Bash(curl -s http://localhost:8765/api/voice/info kill %1 wait)"
+      "Bash(curl -s http://localhost:8765/api/voice/info kill %1 wait)",
+      "Bash(python -c ':*)",
+      "Bash(/c/Users/sindh/anaconda3/python:*)"
     ]
   }
 }

@@ -1,27 +1,255 @@
-[
-  {
-    "id": "voicemail_basic",
-    "transcript": "You've reached the voicemail of Example Clinic. Please leave a message after the tone.\n[Beep]",
-    "expected_status": "voicemail"
+{
+  "version": "1.0",
+  "description": "20 labeled transcript scenarios for evaluating the Ghost Network Buster hybrid classifier. Covers all 8 ghost_reason types, real confirmations, voicemail, and edge cases. Each scenario notes which classifier path should handle it.",
+  "classifier_paths": {
+    "keyword": "Fast-path triggers on literal strings in the lowercased transcript: 'voicemail', '[beep]', 'leave a message', 'not in service', 'disconnected', 'dial tone'",
+    "llm": "All other transcripts deferred to Gemini Flash via the structured _CLASSIFICATION_PROMPT"
   },
-  {
-    "id": "disconnected",
-    "transcript": "[Dial tone / number not in service]",
-    "expected_status": "ghost"
-  },
-  {
-    "id": "wrong_network",
-    "transcript": "Reception: Test Practice.\nAgent: Do you accept Aetna for behavioral health?\nReception: We haven't taken Aetna in years — we're out of network.\n",
-    "expected_status": "ghost"
-  },
-  {
-    "id": "accepting",
-    "transcript": "Reception: Hi.\nAgent: Are you accepting new therapy patients with Aetna?\nReception: Yes, we are. Next opening is in about a week.\n",
-    "expected_status": "real"
-  },
-  {
-    "id": "ambiguous",
-    "transcript": "Please hold while we connect you.",
-    "expected_status": "no_answer"
-  }
-]
+  "ghost_reasons": [
+    "disconnected", "wrong_network", "no_behavioral_health",
+    "not_accepting_patients", "wrong_provider", "retired",
+    "wrong_specialty", "referral_only"
+  ],
+  "scenarios": [
+    {
+      "id": "S01",
+      "description": "Disconnected — automated SIT recording",
+      "carrier": "Aetna",
+      "transcript": "Agent: Hi, I'm calling to verify if Dr. Anita Patel accepts Aetna insurance for behavioral health and is accepting new patients.\n[Automated recording: We're sorry, the number you have dialed is not in service. Please check the number and try again.]",
+      "expected": {
+        "status": "ghost",
+        "ghost_reason": "disconnected"
+      },
+      "classifier_path": "keyword",
+      "notes": "Literal 'not in service' triggers keyword fast-path before LLM is invoked."
+    },
+    {
+      "id": "S02",
+      "description": "Disconnected — line rings then explicit disconnect message",
+      "carrier": "Cigna",
+      "transcript": "Agent: Good morning. I'm calling to confirm whether Dr. Robert Torres is still at this location and accepting Cigna for therapy.\n[Line rings 14 times, then: This number has been disconnected. No further information is available.]",
+      "expected": {
+        "status": "ghost",
+        "ghost_reason": "disconnected"
+      },
+      "classifier_path": "keyword",
+      "notes": "Literal 'disconnected' in transcript body triggers keyword fast-path."
+    },
+    {
+      "id": "S03",
+      "description": "Wrong network — practice dropped the carrier 18 months ago",
+      "carrier": "BCBS",
+      "transcript": "Agent: Hi, I'm calling to verify whether Dr. Simone Barker accepts Blue Cross Blue Shield for outpatient behavioral health and is taking new patients.\nReceptionist: We used to take Blue Cross but we dropped them about 18 months ago. We're only in-network with United now.\nAgent: Is there any chance you'll be rejoining the BCBS network?\nReceptionist: I honestly don't know, that's a decision above my pay grade.",
+      "expected": {
+        "status": "ghost",
+        "ghost_reason": "wrong_network"
+      },
+      "classifier_path": "llm",
+      "notes": "No keyword trigger. LLM must infer 'dropped' and 'only in-network with United' means wrong_network for BCBS."
+    },
+    {
+      "id": "S04",
+      "description": "Wrong network — practice never accepted this carrier",
+      "carrier": "Aetna",
+      "transcript": "Agent: Good afternoon. I'm calling to verify if Dr. Chen's practice accepts Aetna for mental health services.\nReceptionist: No, we've never been in-network with Aetna. We take Oxford and Cigna only.\nAgent: Is Dr. Chen listed in the Aetna directory by any chance?\nReceptionist: That might be an old listing. We haven't accepted Aetna for at least five years.",
+      "expected": {
+        "status": "ghost",
+        "ghost_reason": "wrong_network"
+      },
+      "classifier_path": "llm",
+      "notes": "LLM must distinguish 'never accepted' from other ghost reasons. Stale directory listing context included."
+    },
+    {
+      "id": "S05",
+      "description": "Not accepting patients — closed panel with 6-9 month waitlist",
+      "carrier": "Aetna",
+      "transcript": "Agent: Hi, I'm reaching out to confirm whether your practice is accepting new Aetna patients for anxiety and depression therapy.\nReceptionist: Our panel is completely full at the moment. We closed to new patients back in March.\nAgent: Is there a waitlist we could join?\nReceptionist: We do have a waitlist but it's also quite long — realistically 6 to 9 months out.",
+      "expected": {
+        "status": "ghost",
+        "ghost_reason": "not_accepting_patients"
+      },
+      "classifier_path": "llm",
+      "notes": "Provider accepts Aetna and offers BH services but is functionally inaccessible. Extended waitlist still counts as not_accepting."
+    },
+    {
+      "id": "S06",
+      "description": "Not accepting patients — booked solid, no timeline given",
+      "carrier": "UHC",
+      "transcript": "Agent: Good morning. I'm verifying if Dr. Williams is accepting new patients under UnitedHealthcare for behavioral health.\nReceptionist: She's not taking anyone new right now. Her schedule is completely booked.\nAgent: Any idea when she might open back up?\nReceptionist: We just don't know, I'm sorry.",
+      "expected": {
+        "status": "ghost",
+        "ghost_reason": "not_accepting_patients"
+      },
+      "classifier_path": "llm",
+      "notes": "Short exchange. LLM must recognize 'not taking anyone new' and 'completely booked' as not_accepting_patients."
+    },
+    {
+      "id": "S07",
+      "description": "Wrong provider — listed therapist left the practice 2 years ago",
+      "carrier": "Cigna",
+      "transcript": "Agent: I'm calling to reach Dr. Felix Huang, a behavioral health therapist listed in the Cigna directory at this number.\nReceptionist: Dr. Huang left our practice two years ago. We have no forwarding information for him.\nAgent: Do you know where he relocated?\nReceptionist: No idea, he just left. This listing in the directory must be outdated.",
+      "expected": {
+        "status": "ghost",
+        "ghost_reason": "wrong_provider"
+      },
+      "classifier_path": "llm",
+      "notes": "Provider left the practice — directory listing is stale. Removed network-related language that was confusing the LLM into wrong_network."
+    },
+    {
+      "id": "S08",
+      "description": "Wrong provider — number belongs to an unrelated business",
+      "carrier": "Aetna",
+      "transcript": "Agent: Hi, I'm calling to verify if Dr. Maria Santos at this number accepts Aetna insurance for behavioral health services.\nPerson: This is Tony's Dry Cleaning. There's no doctor here — you have the wrong number.\nAgent: To confirm — there is no medical practice or Dr. Maria Santos at this number?\nPerson: Correct, absolutely not. This number belongs to a dry cleaning business.",
+      "expected": {
+        "status": "ghost",
+        "ghost_reason": "wrong_provider"
+      },
+      "classifier_path": "llm",
+      "notes": "Extreme wrong_provider case — directory number belongs to a non-medical business entirely."
+    },
+    {
+      "id": "S09",
+      "description": "Retired — provider retired, practice fully closed",
+      "carrier": "BCBS",
+      "transcript": "Agent: Good morning. I'm calling to verify if Dr. Harold Greene is currently seeing patients and accepting BCBS for therapy.\nReceptionist: Dr. Greene retired at the end of last year. The practice has been closed since January.\nAgent: Is there anyone else at this location continuing his practice?\nReceptionist: No, the office has completely closed. We're just fielding final calls.",
+      "expected": {
+        "status": "ghost",
+        "ghost_reason": "retired"
+      },
+      "classifier_path": "llm",
+      "notes": "Practice fully closed post-retirement. LLM must distinguish retired from wrong_provider (provider is gone but reason is retirement, not relocation)."
+    },
+    {
+      "id": "S10",
+      "description": "No behavioral health — gastroenterology practice listed in BH directory",
+      "carrier": "Aetna",
+      "transcript": "Agent: Hi, I'm calling to confirm whether your practice accepts Aetna for behavioral health and mental health services.\nReceptionist: We accept Aetna, yes — but we're a gastroenterology practice. We don't offer any mental health or behavioral health services here.\nAgent: Dr. Feldman is listed in Aetna's behavioral health directory.\nReceptionist: That has to be a data error. We've never offered those services.",
+      "expected": {
+        "status": "ghost",
+        "ghost_reason": "no_behavioral_health"
+      },
+      "classifier_path": "llm",
+      "notes": "Practice IS in-network for Aetna but the wrong specialty category. Classic directory data error — must not be classified as wrong_network."
+    },
+    {
+      "id": "S11",
+      "description": "Wrong specialty — cardiologist listed in UHC mental health directory",
+      "carrier": "UHC",
+      "transcript": "Agent: Good afternoon. I'm trying to reach a behavioral health provider — Dr. Yuki Tanaka — listed in the UnitedHealthcare mental health directory.\nReceptionist: Dr. Tanaka is a cardiologist. This is a cardiology practice.\nAgent: Is she listed incorrectly in the UHC behavioral health directory?\nReceptionist: It sounds like it. She doesn't treat mental health conditions at all.",
+      "expected": {
+        "status": "ghost",
+        "ghost_reason": "wrong_specialty"
+      },
+      "classifier_path": "llm",
+      "notes": "Distinct from no_behavioral_health: the named provider has a specific wrong specialty (cardiology), not just a wrong practice category."
+    },
+    {
+      "id": "S12",
+      "description": "Referral only — PCP referral required, not disclosed in directory",
+      "carrier": "Aetna",
+      "transcript": "Agent: Hi, I'm calling to confirm that Dr. Priya Nair accepts Aetna and is taking new patients for anxiety treatment.\nReceptionist: Dr. Nair does accept Aetna and is in-network. However, we only accept patients with a referral from a primary care physician.\nAgent: Is that requirement stated in the Aetna online directory?\nReceptionist: I'm not sure what the directory says, but that's our policy — referral required, no exceptions.",
+      "expected": {
+        "status": "ghost",
+        "ghost_reason": "referral_only"
+      },
+      "classifier_path": "llm",
+      "notes": "Tricky case: provider IS in-network and IS accepting patients — but the undisclosed referral barrier makes them a ghost listing under MHPAEA parity rules."
+    },
+    {
+      "id": "S13",
+      "description": "Real — in-network, accepting, care need confirmed",
+      "carrier": "Aetna",
+      "transcript": "Agent: Hi, I'm calling to verify if your practice accepts Aetna insurance for outpatient therapy and is currently taking new patients.\nReceptionist: Yes, we do accept Aetna for behavioral health. And yes, we are accepting new patients right now.\nAgent: Are there therapists available who specialize in anxiety and trauma?\nReceptionist: We have two therapists with openings who work with anxiety and PTSD. First available is next Tuesday.",
+      "expected": {
+        "status": "real",
+        "ghost_reason": null
+      },
+      "classifier_path": "llm",
+      "notes": "Unambiguous real: in-network confirmed, accepting new patients confirmed, care need match confirmed, specific date given."
+    },
+    {
+      "id": "S14",
+      "description": "Real — BCBS, confirmed with 2-week availability",
+      "carrier": "BCBS",
+      "transcript": "Agent: Good afternoon. I'm confirming whether Dr. Jordan accepts BCBS for mental health services and has availability for new patients.\nReceptionist: Absolutely — Dr. Jordan is in-network with Blue Cross and she does have openings. Next available is in about two weeks.\nAgent: Great. Is she seeing patients for depression and anxiety?\nReceptionist: Yes, those are her primary areas.",
+      "expected": {
+        "status": "real",
+        "ghost_reason": null
+      },
+      "classifier_path": "llm",
+      "notes": "Real with 2-week wait. LLM must not misclassify short wait as not_accepting_patients — two weeks is accessible."
+    },
+    {
+      "id": "S15",
+      "description": "Real — trauma-certified provider, same-week opening",
+      "carrier": "Cigna",
+      "transcript": "Agent: Hi, I'm verifying if your practice accepts Cigna for behavioral health and has availability for someone seeking trauma-focused therapy.\nReceptionist: Yes, we take Cigna. We actually have a therapist who just had a cancellation and is available as early as this Thursday.\nAgent: And they can work with trauma and PTSD patients?\nReceptionist: Yes, two of our providers are trauma-certified. Both are currently accepting new Cigna patients.",
+      "expected": {
+        "status": "real",
+        "ghost_reason": null
+      },
+      "classifier_path": "llm",
+      "notes": "Strong real signal with care need confirmation (trauma/PTSD) and immediate availability."
+    },
+    {
+      "id": "S16",
+      "description": "Voicemail — explicit greeting with beep",
+      "carrier": "Aetna",
+      "transcript": "Agent: Hi, I'm calling to verify if Dr. Angela Brooks accepts Aetna for behavioral health and is accepting new patients.\n[Automated voice: You have reached the voicemail of Dr. Angela Brooks. Please leave a message after the tone and she will return your call within 48 hours.]\n[beep]",
+      "expected": {
+        "status": "voicemail",
+        "ghost_reason": null
+      },
+      "classifier_path": "keyword",
+      "notes": "Both 'voicemail' and '[beep]' trigger keyword fast-path. No LLM call needed."
+    },
+    {
+      "id": "S17",
+      "description": "Voicemail — office closed, leave a message",
+      "carrier": "UHC",
+      "transcript": "Agent: Good morning. Calling to confirm if this practice accepts UnitedHealthcare for therapy services and is taking new patients.\n[Recording: Thank you for calling Eastside Counseling. Our office is currently closed. Please leave a message and we will return your call within one business day.]",
+      "expected": {
+        "status": "voicemail",
+        "ghost_reason": null
+      },
+      "classifier_path": "keyword",
+      "notes": "'Leave a message' triggers keyword fast-path. No human responded — no insurance or availability confirmation possible."
+    },
+    {
+      "id": "S18",
+      "description": "No answer — call drops mid-sentence",
+      "carrier": "Aetna",
+      "transcript": "Agent: Hi, I'm calling to verify whether your practice accepts Aetna for behavioral health—\n[Call drops mid-sentence]",
+      "expected": {
+        "status": "no_answer",
+        "ghost_reason": null
+      },
+      "classifier_path": "llm",
+      "notes": "No keyword trigger. LLM receives truncated transcript with no outcome signal — should return no_answer, not ghost."
+    },
+    {
+      "id": "S19",
+      "description": "STT carrier name garbling — 'eight now' instead of 'Aetna'",
+      "carrier": "Aetna",
+      "transcript": "Agent: Hi, I'm calling to verify if your practice accepts eight now insurance for behavioral health and is taking new patients.\nReceptionist: Eight now? Oh, you mean Aetna? Yes, we do take Aetna. And we are taking new patients right now.\nAgent: Perfect, can you confirm that covers behavioral health?\nReceptionist: Yes, Aetna covers our full range of therapy services.",
+      "expected": {
+        "status": "real",
+        "ghost_reason": null
+      },
+      "classifier_path": "llm",
+      "notes": "Tests LLM robustness to Deepgram STT errors. The classification prompt explicitly warns: 'carrier name may be garbled (e.g. eight now instead of Aetna)'. Outcome is still real."
+    },
+    {
+      "id": "S20",
+      "description": "Ambiguous — long hold, call disconnects with no substantive response",
+      "carrier": "BCBS",
+      "transcript": "Agent: Hi, I'm calling to verify if Dr. Thompson accepts Blue Cross for behavioral health.\nPerson: Uh... hold on... [extended hold music] ... [hold music continues] ... [call disconnects after 4 minutes on hold]",
+      "expected": {
+        "status": "no_answer",
+        "ghost_reason": null
+      },
+      "classifier_path": "llm",
+      "notes": "No keyword trigger — 'disconnected' does not appear as a literal word; it is a narrative description. LLM receives an ambiguous transcript with no confirmation either way and should return no_answer, not ghost/disconnected."
+    }
+  ]
+}
