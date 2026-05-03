@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
+import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import RequireAuth from "./auth/RequireAuth";
 import RoleGate from "./auth/RoleGate";
@@ -94,36 +94,52 @@ function TopNav() {
   );
 }
 
+const APP_ROUTES = (
+  <Route element={<RequireAuth />}>
+    <Route element={<AppLayout />}>
+      <Route path="/app" element={<RoleGate />} />
+      <Route path="/app/patient" element={<PatientHome />} />
+      <Route path="/app/patient/audits/new" element={<Landing />} />
+      <Route path="/app/patient/audits/:auditId" element={<Dashboard />} />
+      <Route path="/app/patient/results/:auditId" element={<Results />} />
+      <Route path="/app/employer" element={<EmployerHome />} />
+    </Route>
+  </Route>
+);
+
 function Shell() {
   const { t } = useLocale();
+  const location = useLocation();
+  const isApp = location.pathname.startsWith("/app");
+
+  const routes = (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/pricing" element={<Pricing />} />
+      <Route path="/how-it-works" element={<HowItWorks />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="/checkout" element={<Checkout />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
+      {APP_ROUTES}
+    </Routes>
+  );
+
+  if (isApp) {
+    return (
+      <>
+        <a href="#main-content" className="skip-link sr-only print-hidden">{t("skipToMain")}</a>
+        {routes}
+      </>
+    );
+  }
+
   return (
     <div className="shell">
-      <a href="#main-content" className="skip-link print-hidden">
-        {t("skipToMain")}
-      </a>
+      <a href="#main-content" className="skip-link print-hidden">{t("skipToMain")}</a>
       <TopNav />
-      <main id="main-content">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/pricing" element={<Pricing />} />
-          <Route path="/how-it-works" element={<HowItWorks />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/privacy" element={<Privacy />} />
-          <Route element={<RequireAuth />}>
-            <Route element={<AppLayout />}>
-              <Route path="/app" element={<RoleGate />} />
-              <Route path="/app/patient" element={<PatientHome />} />
-              <Route path="/app/patient/audits/new" element={<Landing />} />
-              <Route path="/app/patient/audits/:auditId" element={<Dashboard />} />
-              <Route path="/app/patient/results/:auditId" element={<Results />} />
-              <Route path="/app/employer" element={<EmployerHome />} />
-            </Route>
-          </Route>
-        </Routes>
-      </main>
+      <main id="main-content">{routes}</main>
     </div>
   );
 }
