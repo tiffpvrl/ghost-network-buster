@@ -16,7 +16,7 @@ Built as a Columbia University Agentic AI capstone (May 2026).
 | **Hybrid classifier** | `agents/classifier.py` — keyword fast-path for high-confidence signals (disconnected, voicemail) with Gemini Flash LLM fallback for all other cases. 8 ghost reason categories. |
 | **RAG** | `tools/rag.py` — local TF-IDF over bundled regulatory corpus (`data/regulatory_corpus/`): NY ISC §3217-a/§4324, MHPAEA, NSA. RAG hits injected into complaint letters and returned in `AuditSummary.rag_hits`. |
 | **LLM structured output** | `agents/classifier.py` — Gemini Flash returns `{status, ghost_reason, summary}` JSON. `agents/complaint_agent.py` — Gemini synthesizes a multi-page complaint letter grounded in RAG hits. |
-| **Voice pipeline** | `main.py` (`/ws/twilio-audio/{call_id}`) — Twilio media stream → Pipecat 1.0 → Deepgram STT → `_VertexLLMProcessor` (Gemini 2.0 Flash on Vertex AI) → Deepgram TTS → audio back to Twilio |
+| **Voice pipeline** | `main.py` (`/ws/twilio-audio/{call_id}`) — Twilio media stream → Pipecat 1.0 → Deepgram STT → `_VertexLLMProcessor` (Vertex Gemini, **streaming** `generate_content_stream` → `LLMTextFrame` chunks) → Deepgram TTS (**token** aggregation) → audio back to Twilio |
 | **Parallel execution** | `pipeline/run_audit.py` — `asyncio.Semaphore(max_parallel_calls)` fans out provider calls concurrently |
 | **Structured output / Pydantic** | `models.py` — `CallResult`, `AuditState`, `AuditSummary` with full type validation throughout |
 | **Memory** | `tools/memory_tool.py` — per-NPI result JSON persisted to `data/memory_npi/` or `GCS_MEMORY_BUCKET` to avoid re-calling known providers |

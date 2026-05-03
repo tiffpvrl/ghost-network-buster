@@ -28,6 +28,8 @@ class Settings(BaseSettings):
 
     # Vertex AI (used for Gemini LLM — complaint draft + Pipecat pipeline)
     vertex_location: str = "us-central1"   # Vertex AI region
+    # Live Pipecat turn uses streaming TTS; model id must exist in vertex_location for your project.
+    vertex_pipecat_llm_model: str = "gemini-2.0-flash"
 
     # Pipecat / open-source voice (used when VOICE_PROVIDER=pipecat)
     public_url: str | None = None          # ngrok or Cloud Run URL, no trailing slash

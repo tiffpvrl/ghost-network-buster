@@ -61,6 +61,7 @@ try:
     )
     from pipecat.services.deepgram.stt import DeepgramSTTService
     from pipecat.services.deepgram.tts import DeepgramTTSService
+    from pipecat.services.tts_service import TextAggregationMode
     from pipecat.transports.websocket.fastapi import (
         FastAPIWebsocketTransport,
         FastAPIWebsocketParams,
@@ -654,7 +655,14 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
             Deepgram emits InterimTranscriptionFrame while the caller speaks and TranscriptionFrame
             when an utterance is final. If the call ends before a final, we would previously lose
             provider text — we fold interim lines in and replace them with the final when it arrives.
+
+            LLM replies may arrive as many LLMTextFrame chunks (streaming); we record one Agent line
+            per LLM turn on LLMFullResponseEndFrame.
             """
+
+            def __init__(self) -> None:
+                super().__init__()
+                self._agent_llm_accum: str = ""
 
             async def process_frame(self, frame, direction: FrameDirection):  # type: ignore[override]
                 await super().process_frame(frame, direction)
@@ -674,8 +682,14 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                             transcript_lines[-1] = final_line
                         else:
                             transcript_lines.append(final_line)
+                elif isinstance(frame, LLMFullResponseStartFrame):
+                    self._agent_llm_accum = ""
                 elif isinstance(frame, LLMTextFrame):
-                    transcript_lines.append(f"Agent: {frame.text}")
+                    self._agent_llm_accum += frame.text
+                elif isinstance(frame, LLMFullResponseEndFrame):
+                    if self._agent_llm_accum.strip():
+                        transcript_lines.append(f"Agent: {self._agent_llm_accum.strip()}")
+                    self._agent_llm_accum = ""
                 await self.push_frame(frame, direction)
 
         provider_name = provider.name if provider else "the practice"
@@ -756,13 +770,42 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                             return
                         self._history.append({"role": "user", "parts": [{"text": raw}]})
                         await self.push_frame(LLMFullResponseStartFrame())
-                        # Bug 3: use the async API directly instead of asyncio.to_thread.
-                        resp = await self._client.aio.models.generate_content(
-                            model="gemini-2.0-flash-lite",
-                            contents=self._history,
-                            config={"system_instruction": system_prompt},
-                        )
-                        reply = (resp.text or "").strip()
+                        model_id = settings.vertex_pipecat_llm_model
+                        reply = ""
+                        prev_stream_text = ""
+                        try:
+                            stream = await self._client.aio.models.generate_content_stream(
+                                model=model_id,
+                                contents=self._history,
+                                config={"system_instruction": system_prompt},
+                            )
+                            async for chunk in stream:
+                                full = chunk.text or ""
+                                if not full:
+                                    continue
+                                if full.startswith(prev_stream_text):
+                                    delta = full[len(prev_stream_text) :]
+                                else:
+                                    delta = full
+                                    full = prev_stream_text + full
+                                prev_stream_text = full
+                                if delta:
+                                    reply += delta
+                                    await self.push_frame(LLMTextFrame(text=delta))
+                        except Exception as exc:
+                            logger.warning(
+                                "Pipecat: streaming LLM failed (%s), falling back to non-streaming",
+                                exc,
+                            )
+                            resp = await self._client.aio.models.generate_content(
+                                model=model_id,
+                                contents=self._history,
+                                config={"system_instruction": system_prompt},
+                            )
+                            reply = (resp.text or "").strip()
+                            if reply:
+                                await self.push_frame(LLMTextFrame(text=reply))
+                        reply = reply.strip()
                         if not reply:
                             logger.warning(
                                 "Pipecat: Gemini returned empty reply; using fallback (user STT %r)",
@@ -772,8 +815,8 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                                 f"I didn't quite hear that — do you accept {carrier_hint} "
                                 "for behavioral health and are you accepting new patients?"
                             )
+                            await self.push_frame(LLMTextFrame(text=reply))
                         self._history.append({"role": "model", "parts": [{"text": reply}]})
-                        await self.push_frame(LLMTextFrame(text=reply))
                         await self.push_frame(LLMFullResponseEndFrame())
                         farewell_phrases = ("have a great day", "goodbye", "take care", "bye")
                         has_farewell = any(p in reply.lower() for p in farewell_phrases)
@@ -820,6 +863,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
             api_key=settings.deepgram_api_key or "",
             voice=settings.deepgram_tts_voice,
             sample_rate=settings.deepgram_tts_sample_rate,
+            text_aggregation_mode=TextAggregationMode.TOKEN,
         )
         _agent_debug_log(
             "twilio_audio_ws:deepgram_init",
