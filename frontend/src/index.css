@@ -2220,3 +2220,330 @@ table.beacon-providers tbody td.num { text-align: right; font-feature-settings: 
     display: none !important;
   }
 }
+
+/* ── Marketing: hero split layout ──────────────────────────────────────────── */
+.mktg-hero-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  align-items: center;
+  padding-bottom: 2.5rem;
+}
+@media (max-width: 860px) {
+  .mktg-hero-split {
+    grid-template-columns: 1fr;
+  }
+  .mktg-hero-visual { display: none; }
+}
+.mktg-hero-content {}
+
+/* ── Product preview widget ─────────────────────────────────────────────────── */
+.mktg-hero-visual {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  flex-shrink: 0;
+}
+
+.mktg-hero-visual__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2, var(--bg));
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.mktg-hero-visual__live-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--real);
+  box-shadow: 0 0 0 3px var(--real-dim);
+  animation: pulse-soft 2s ease-out infinite;
+  flex-shrink: 0;
+}
+
+.mktg-hero-visual__badge {
+  margin-left: auto;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+}
+
+.mktg-hero-visual__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.4rem;
+  padding: 0.85rem;
+}
+
+.mktg-hero-visual__chip {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 0.55rem 0.5rem;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+
+.mktg-hero-visual__chip-name {
+  font-size: 0.64rem;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mktg-hero-visual__chip-status {
+  font-size: 0.56rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.mktg-hero-visual__chip.ghost {
+  border-color: var(--tile-ghost-border);
+  background: var(--ghost-dim);
+}
+.mktg-hero-visual__chip.ghost .mktg-hero-visual__chip-status { color: var(--ghost); }
+
+.mktg-hero-visual__chip.real {
+  border-color: var(--tile-real-border);
+  background: var(--real-dim);
+}
+.mktg-hero-visual__chip.real .mktg-hero-visual__chip-status { color: var(--real); }
+
+.mktg-hero-visual__chip.voicemail {
+  border-color: color-mix(in srgb, var(--amber) 35%, var(--border));
+  background: var(--amber-dim);
+}
+.mktg-hero-visual__chip.voicemail .mktg-hero-visual__chip-status { color: var(--amber); }
+
+.mktg-hero-visual__footer {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2, var(--bg));
+}
+
+.mktg-hero-visual__stat {
+  font-size: 0.68rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.32rem;
+}
+.mktg-hero-visual__stat::before {
+  content: "";
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.mktg-hero-visual__stat.ghost  { color: var(--ghost); }
+.mktg-hero-visual__stat.ghost::before  { background: var(--ghost); }
+.mktg-hero-visual__stat.real   { color: var(--real); }
+.mktg-hero-visual__stat.real::before   { background: var(--real); }
+.mktg-hero-visual__stat.vm     { color: var(--amber); }
+.mktg-hero-visual__stat.vm::before     { background: var(--amber); }
+
+/* ── Marketing: stat bar ────────────────────────────────────────────────────── */
+.mktg-stat-bar {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 0 0 2rem;
+  flex-wrap: wrap;
+}
+
+.mktg-stat-item {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.mktg-stat-item__icon {
+  width: 38px; height: 38px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.mktg-stat-item__icon svg { width: 18px; height: 18px; }
+
+.mktg-stat-item__val {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.mktg-stat-item__lbl {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.1rem;
+  line-height: 1.4;
+}
+
+.mktg-stat-sep {
+  width: 1px;
+  background: var(--border);
+  flex-shrink: 0;
+  align-self: stretch;
+  margin: 0.75rem 0;
+}
+
+@media (max-width: 720px) {
+  .mktg-stat-sep { display: none; }
+  .mktg-stat-bar { flex-direction: column; }
+  .mktg-stat-item { border-top: 1px solid var(--border); }
+  .mktg-stat-item:first-child { border-top: none; }
+}
+
+/* ── Marketing: feature card icon ───────────────────────────────────────────── */
+.feature-card__icon {
+  width: 42px; height: 42px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+.feature-card__icon svg { width: 20px; height: 20px; }
+.feature-card__icon--patient {
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  color: var(--primary);
+}
+.feature-card__icon--employer {
+  background: color-mix(in srgb, var(--amber) 14%, var(--surface));
+  color: var(--amber);
+}
+
+/* ── Marketing: what-you-get feature tiles ──────────────────────────────────── */
+.mktg-feature-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+
+.mktg-feature-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.mktg-feature-tile:hover {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  box-shadow: var(--shadow-sm);
+}
+
+.mktg-feature-tile__icon {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+}
+.mktg-feature-tile__icon svg { width: 15px; height: 15px; }
+
+.mktg-feature-tile p {
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* ── Marketing: HowItWorks step icons ───────────────────────────────────────── */
+.step__icon-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.step__icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+}
+.step__icon svg { width: 14px; height: 14px; }
+
+.step {
+  grid-template-columns: auto 1fr;
+}
+
+.mktg-preview-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.65rem;
+}
+
+/* ── Pricing: checkmark list ────────────────────────────────────────────────── */
+.price-card__list--check {
+  list-style: none;
+  padding: 0;
+}
+.price-card__list--check li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 0.9rem;
+}
+.price-card__list--check li:last-child { border-bottom: none; }
+
+/* ── Auth: brand header ─────────────────────────────────────────────────────── */
+.mktg-auth-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.mktg-auth-brand .brand-mark {
+  width: 36px; height: 36px;
+  border-radius: 9px;
+}
+
+.mktg-auth-brand__name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
