@@ -18,8 +18,26 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
+# Cloud Shell has a small $HOME; stale caches often push installs over the limit.
+if [[ "${CLOUD_SHELL:-}" == "true" ]]; then
+  echo "Cloud Shell: pruning uv/pip caches to free disk…"
+  uv cache prune 2>/dev/null || true
+  rm -rf "${HOME}/.cache/pip" 2>/dev/null || true
+fi
+
 echo "Syncing Python dependencies…"
+set +e
 uv sync
+_uv_ec=$?
+set -e
+if [[ "${_uv_ec}" -ne 0 ]]; then
+  echo "" >&2
+  echo "uv sync failed. If the error was 'No space left on device', free space and retry:" >&2
+  echo "  uv cache prune && rm -rf ~/.cache/uv ~/.cache/pip" >&2
+  echo "  # optional: docker system prune -af" >&2
+  echo "  df -h ~" >&2
+  exit "${_uv_ec}"
+fi
 
 if [[ ! -f .env ]]; then
   cp .env.example .env

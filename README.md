@@ -73,6 +73,8 @@ This installs **uv** if missing, runs `uv sync`, creates `.env` from `.env.examp
 
 In Cloud Shell, open **Web Preview → Preview on port 5173**. Demo: append **`/?demo=true`** to the preview URL.
 
+If **`uv sync` fails with “No space left on device”**, the default dependencies avoid **`uvicorn[standard]`** (no **uvloop**, smaller wheels). Free caches and retry: `uv cache prune && rm -rf ~/.cache/uv ~/.cache/pip`, then run the script again. For a faster server locally (larger install), use `uv sync --extra performance`.
+
 ---
 
 ## Demo mode (no calls placed)
