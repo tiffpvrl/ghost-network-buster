@@ -551,14 +551,15 @@ async def get_summary(
 
 
 @app.websocket("/ws/audit/{audit_id}")
-async def audit_ws(websocket: WebSocket, audit_id: str, request: Request) -> None:
-    settings: Settings = request.app.state.settings
+async def audit_ws(websocket: WebSocket, audit_id: str) -> None:
+    # WebSocket routes do not inject Request; use websocket.app.state like HTTP handlers.
+    settings: Settings = websocket.app.state.settings
     if settings.demo_api_key:
         key = websocket.query_params.get("demo_key")
         if key != settings.demo_api_key:
             await websocket.close(code=4401)
             return
-    hub: WsHub = _get_ws(request)
+    hub: WsHub = websocket.app.state.ws
     await hub.connect(audit_id, websocket)
     try:
         while True:
