@@ -4,6 +4,7 @@ import type { AuditSummary, CallResult } from "../api";
 import { ApiError, apiGet } from "../api";
 import { isSoundEnabled, playCallSound, playComplete, setSoundEnabled } from "../audio";
 import StatusLegend from "../components/StatusLegend";
+import AuditStepper from "../components/AuditStepper";
 import { DEMO_AUDIT_ID, DEMO_REPLAY_INTERVAL_MS, DEMO_SUMMARY } from "../demo-data";
 import { ghostReasonLabelShort } from "../labels";
 import { useLocale } from "../locale";
@@ -81,7 +82,7 @@ function Confetti() {
     return Array.from({ length: 28 }, (_, i) => ({
       id: i,
       left: `${Math.random() * 100}%`,
-      color: i % 3 === 0 ? "var(--ghost)" : i % 3 === 1 ? "var(--real)" : "var(--amber)",
+      color: i % 3 === 0 ? "var(--primary)" : i % 3 === 1 ? "var(--real)" : "var(--amber)",
       duration: `${1.8 + Math.random() * 1.4}s`,
       delay: `${Math.random() * 0.8}s`,
     }));
@@ -341,7 +342,13 @@ export default function Dashboard() {
   const displayCall = pinnedCall ?? lastCall;
 
   const tilesClickable = (doneAll || failed) && (summary?.results.length ?? 0) > 0;
-  const showConfetti = doneAll && !failed && (summary?.real_count ?? 0) > 0 && !prefersReducedMotion;
+  const celebrateEnv = import.meta.env.VITE_CELEBRATE_COMPLETION === "true";
+  const showConfetti =
+    doneAll &&
+    !failed &&
+    (summary?.real_count ?? 0) > 0 &&
+    !prefersReducedMotion &&
+    (isDemo || celebrateEnv);
 
   const ghostReasonsInResults = useMemo(() => {
     const s = new Set<string>();
@@ -397,6 +404,10 @@ export default function Dashboard() {
           <span style={{ fontSize: "0.72rem", color: "var(--muted)", fontFamily: "var(--font-mono)" }}>{elapsedStr}</span>
         </div>
       </div>
+
+      {!failed ? (
+        <AuditStepper auditId={auditId} doneAll={doneAll} failed={failed} realCount={summary?.real_count ?? 0} />
+      ) : null}
 
       {/* KPIs */}
       <div className="kpi-row">
@@ -527,8 +538,8 @@ export default function Dashboard() {
                     style={{
                       textAlign: "left",
                       cursor: "pointer",
-                      outline: isSelected ? "1.5px solid var(--amber)" : undefined,
-                      boxShadow: isSelected ? "0 0 8px var(--amber)" : undefined,
+                      outline: isSelected ? "1.5px solid var(--primary)" : undefined,
+                      boxShadow: isSelected ? "0 0 8px color-mix(in srgb, var(--primary) 45%, transparent)" : undefined,
                     }}
                   >
                     {inner}

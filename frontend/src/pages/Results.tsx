@@ -184,70 +184,67 @@ export default function Results() {
         </p>
       ) : null}
 
-      <div className="banner notices-compact" style={{ marginBottom: "1rem" }}>
-        <div
-          style={{
-            fontWeight: 700,
-            fontSize: "0.65rem",
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: "var(--muted)",
-            marginBottom: "0.35rem",
-          }}
-        >
-          {t("noticesTitle")}
+      <div className="results-section">
+        <div className="crisis-band print-hidden">
+          <div className="crisis-band__title">{t("noticesTitle")}</div>
+          <p className="crisis-band__body">
+            {t("crisis988Short")}{" "}
+            <a href="tel:988">988</a>
+            {" · "}
+            <a href="https://988lifeline.org/" rel="noopener noreferrer" target="_blank">
+              {t("crisisLinks")}
+            </a>
+            {" · "}
+            <a href="https://nycwell.cityofnewyork.us/" rel="noopener noreferrer" target="_blank">
+              {t("crisisNyc")}
+            </a>
+            {". "}
+            {t("noticesShareOnly")}
+          </p>
         </div>
-        <p style={{ fontSize: "0.72rem", color: "var(--muted)", lineHeight: 1.6, margin: 0 }}>
-          {t("crisis988Short")}{" "}
-          <a href="tel:988">988</a>
-          {" · "}
-          <a href="https://988lifeline.org/" rel="noopener noreferrer" target="_blank">
-            {t("crisisLinks")}
-          </a>
-          {" · "}
-          <a href="https://nycwell.cityofnewyork.us/" rel="noopener noreferrer" target="_blank">
-            {t("crisisNyc")}
-          </a>
-          {". "}
-          {t("noticesShareOnly")}
-        </p>
-      </div>
 
-      <div style={{ marginBottom: "1.5rem" }}>
-        <div
-          style={{
-            fontSize: "0.68rem",
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            color: "var(--muted)",
-            marginBottom: "0.4rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-          }}
-        >
-          {t("resultsMetaComplete")} · {summary.carrier} · ZIP {summary.zip_code}
-          {isDemo && (
-            <span
-              style={{
-                fontSize: "0.65rem",
-                fontFamily: "var(--font-mono)",
-                background: "var(--amber)",
-                color: "#000",
-                padding: "0.15rem 0.45rem",
-                borderRadius: 2,
-                letterSpacing: "0.1em",
-              }}
-            >
-              DEMO
+        <div style={{ marginTop: "1.25rem" }}>
+          <div
+            style={{
+              fontSize: "0.68rem",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: "var(--muted)",
+              marginBottom: "0.4rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            {t("resultsMetaComplete")} · {summary.carrier} ·{" "}
+            <span className="mono-id">
+              ZIP {summary.zip_code}
             </span>
-          )}
+            {isDemo && (
+              <span
+                style={{
+                  fontSize: "0.65rem",
+                  fontFamily: "var(--font-mono)",
+                  background: "var(--amber-dim)",
+                  color: "var(--text)",
+                  padding: "0.15rem 0.45rem",
+                  borderRadius: 2,
+                  letterSpacing: "0.1em",
+                }}
+              >
+                DEMO
+              </span>
+            )}
+          </div>
+          <h1>{headline}</h1>
+          <p className="lede" style={{ marginBottom: 0 }}>
+            {ledePieces.join(" ")}
+          </p>
         </div>
-        <h1>{headline}</h1>
-        <p className="lede">{ledePieces.join(" ")}</p>
       </div>
 
-      <div className="kpi-row" style={{ marginBottom: "1.5rem" }}>
+      <div className="results-section">
+        <div className="kpi-row" style={{ marginBottom: "1rem" }}>
         <div className="kpi ghost-kpi">
           <div className="val">{ghostPct}%</div>
           <div className="lbl">Ghost rate</div>
@@ -304,11 +301,14 @@ export default function Results() {
         </div>
       )}
 
-      <h2 style={{ marginBottom: "1rem" }}>{t("shortlistHeading")}</h2>
-      {summary.top_providers.length === 0 ? (
-        <p className="lede">{t("shortlistEmpty")}</p>
-      ) : (
-        summary.top_providers.map((p: CallResult) => (
+      </div>
+
+      <div className="results-section">
+        <h2 style={{ marginBottom: "1rem" }}>{t("shortlistHeading")}</h2>
+        {summary.top_providers.length === 0 ? (
+          <p className="lede">{t("shortlistEmpty")}</p>
+        ) : (
+          summary.top_providers.map((p: CallResult) => (
           <div key={p.npi} className="provider-card verified">
             <div className="verified-badge">
               {t("resultsUsableBadge", { when: formatVerifiedAt(p.verified_at) })}
@@ -338,10 +338,12 @@ export default function Results() {
             </div>
             {open === p.npi && <pre className="mono" style={{ marginTop: "0.65rem" }}>{p.transcript}</pre>}
           </div>
-        ))
-      )}
+          ))
+        )}
+      </div>
 
-      <div className="card print-hidden" style={{ marginTop: "1.5rem", marginBottom: "1.5rem" }}>
+      <div className="results-section">
+        <div className="card print-hidden" style={{ marginBottom: 0 }}>
         <h2>{t("downloadsHeading")}</h2>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
           <button type="button" className="btn secondary" onClick={() => setShareGate(true)}>
@@ -374,47 +376,52 @@ export default function Results() {
           </button>
         </div>
       </div>
+      </div>
 
-      {breakdownEntries.length > 0 && (
-        <div className="card" style={{ marginBottom: "1.5rem" }}>
-          <h2>{t("resultsGhostBreakdown")}</h2>
-          {breakdownEntries.map(([reason, count]) => (
-            <div key={reason} className="bar-row">
-              <div className="lbl">{ghostReasonLabelLong(reason)}</div>
-              <div className="bar-track">
-                <div
-                  className="bar-fill"
-                  style={{ width: `${Math.min(100, (count / Math.max(summary.ghost_count, 1)) * 100)}%` }}
-                />
+      {breakdownEntries.length > 0 ? (
+        <div className="results-section">
+          <div className="card" style={{ marginBottom: 0 }}>
+            <h2>{t("resultsGhostBreakdown")}</h2>
+            {breakdownEntries.map(([reason, count]) => (
+              <div key={reason} className="bar-row">
+                <div className="lbl">{ghostReasonLabelLong(reason)}</div>
+                <div className="bar-track">
+                  <div
+                    className="bar-fill"
+                    style={{ width: `${Math.min(100, (count / Math.max(summary.ghost_count, 1)) * 100)}%` }}
+                  />
+                </div>
+                <div className="count">{count}</div>
               </div>
-              <div className="count">{count}</div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="results-section results-section--tail">
+        <h2 style={{ marginBottom: "0.75rem" }}>{t("allCallsHeading")}</h2>
+        <div className="tile-grid" style={{ marginBottom: "1.25rem" }}>
+          {summary.results.map((row) => (
+            <div
+              key={`${row.npi}-${row.verified_at}`}
+              className={`tile ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem" }}>
+                <span className="name">{row.provider_name || row.npi}</span>
+                <span className={`pill ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}>
+                  {row.status}
+                </span>
+              </div>
+              {row.ghost_reason && <div className="meta">{ghostReasonLabelLong(row.ghost_reason)}</div>}
+              {row.summary && !row.ghost_reason && <div className="meta">{row.summary.slice(0, 55)}</div>}
             </div>
           ))}
         </div>
-      )}
 
-      <h2 style={{ marginBottom: "0.75rem" }}>{t("allCallsHeading")}</h2>
-      <div className="tile-grid" style={{ marginBottom: "2rem" }}>
-        {summary.results.map((row) => (
-          <div
-            key={`${row.npi}-${row.verified_at}`}
-            className={`tile ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem" }}>
-              <span className="name">{row.provider_name || row.npi}</span>
-              <span className={`pill ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}>
-                {row.status}
-              </span>
-            </div>
-            {row.ghost_reason && <div className="meta">{ghostReasonLabelLong(row.ghost_reason)}</div>}
-            {row.summary && !row.ghost_reason && <div className="meta">{row.summary.slice(0, 55)}</div>}
-          </div>
-        ))}
+        <Link to="/" className="print-hidden" style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+          {t("newAudit")}
+        </Link>
       </div>
-
-      <Link to="/" className="print-hidden" style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
-        {t("newAudit")}
-      </Link>
     </div>
   );
 }

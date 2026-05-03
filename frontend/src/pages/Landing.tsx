@@ -261,6 +261,7 @@ export default function Landing() {
           <label htmlFor="zip">{t("landingZip")}</label>
           <input
             id="zip"
+            className="mono-id"
             value={zip}
             onChange={(e) => setZip(e.target.value)}
             onBlur={() => setZipTouched(true)}

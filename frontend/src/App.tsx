@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import { LocaleProvider, useLocale } from "./locale";
 import Dashboard from "./pages/Dashboard";
@@ -7,10 +8,30 @@ import Privacy from "./pages/Privacy";
 import Results from "./pages/Results";
 import Terms from "./pages/Terms";
 
+const THEME_KEY = "gnb_theme";
+
 function Shell() {
   const { locale, setLocale, t } = useLocale();
   const showEmployer = import.meta.env.VITE_SHOW_EMPLOYER !== "false";
   const otherLocale = locale === "en" ? "es" : "en";
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "dark"
+      ? "dark"
+      : "light",
+  );
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      /* ignore */
+    }
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((th) => (th === "light" ? "dark" : "light"));
+  }, []);
 
   return (
     <div className="shell">
@@ -30,6 +51,14 @@ function Shell() {
               {t("navEmployer")}
             </NavLink>
           ) : null}
+          <button
+            type="button"
+            className="theme-toggle print-hidden"
+            onClick={toggleTheme}
+            aria-label={theme === "light" ? t("themeAriaDark") : t("themeAriaLight")}
+          >
+            {theme === "light" ? t("themeUseDark") : t("themeUseLight")}
+          </button>
           <button
             type="button"
             className="locale-toggle print-hidden"
