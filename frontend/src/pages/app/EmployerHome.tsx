@@ -1,18 +1,56 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/AuthProvider";
+import {
+  estimateExposureUsd,
+  loadEmployerAggregates,
+  type EmployerAggregates,
+} from "../../data/employerAggregates";
 import { listByCreatedAt, type EmployerBatch } from "../../data/employerBatches";
+import { downloadRenewalReport } from "../../lib/renewalReport";
 import { useLocale } from "../../locale";
-import Employer from "../Employer";
 
-/**
- * Employer workspace landing page. Shows tier badge, primary CTA to start a new
- * batch audit, and recent batches the user has run. The illustrative aggregates
- * dashboard from the existing Employer page is kept below as reference data.
- */
+const DEFAULT_HEADCOUNT = 500;
+
+function formatUsd(n: number): string {
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+}
+
 export default function EmployerHome() {
   const { t } = useLocale();
   const { employerTier } = useAuth();
-  const recent: EmployerBatch[] = listByCreatedAt().slice(0, 5);
+  const [recent] = useState<EmployerBatch[]>(() => listByCreatedAt().slice(0, 5));
+  const [headcount, setHeadcount] = useState<number>(DEFAULT_HEADCOUNT);
+  const [agg, setAgg] = useState<EmployerAggregates>(() => loadEmployerAggregates());
+
+  // Refresh aggregates every 2s while any batch is still running, otherwise
+  // every 8s so newly completed batches surface without manual reload.
+  useEffect(() => {
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled) return;
+      const next = loadEmployerAggregates();
+      setAgg(next);
+      const interval = next.totals.auditsRunning > 0 ? 2000 : 8000;
+      window.setTimeout(tick, interval);
+    };
+    const id = window.setTimeout(tick, 2000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(id);
+    };
+  }, []);
+
+  const exposure = useMemo(() => estimateExposureUsd(agg, headcount), [agg, headcount]);
+  const hasData = agg.totals.audits > 0;
+
+  function handleDownload() {
+    downloadRenewalReport(agg, { headcount });
+  }
 
   return (
     <div className="employer-home">
@@ -37,6 +75,15 @@ export default function EmployerHome() {
           <Link to="/app/employer/audits/new" className="btn">
             {t("employerHomeRunNewAudit")}
           </Link>
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={handleDownload}
+            disabled={!hasData}
+            title={hasData ? "" : t("employerDownloadReportEmptyTitle")}
+          >
+            {t("employerDownloadReport")}
+          </button>
           {employerTier === null ? (
             <Link to="/pricing" className="btn secondary">
               {t("employerHomeSelectPlan")}
@@ -84,14 +131,135 @@ export default function EmployerHome() {
         )}
       </section>
 
-      <section className="section section--alt">
-        <div className="section__title-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.75rem" }}>
+      <section className="section">
+        <div
+          className="section__title-row"
+          style={{ display: "flex", alignItems: "baseline", gap: "0.6rem", marginBottom: "0.5rem" }}
+        >
           <h2 className="section__title" style={{ margin: 0 }}>
-            {t("employerHomeReferenceTitle")}
+            {t("employerHealthTitle")}
           </h2>
-          <span className="tier-badge tier-badge--muted">{t("employerHomeReferenceTag")}</span>
+          {agg.totals.auditsRunning > 0 ? (
+            <span className="tier-badge tier-badge--muted">
+              {t("employerHealthRunning", { n: agg.totals.auditsRunning })}
+            </span>
+          ) : null}
         </div>
-        <Employer />
+
+        {!hasData ? (
+          <div className="card empty-card">
+            <p className="lede" style={{ marginBottom: "0.6rem" }}>
+              {t("employerHealthEmpty")}
+            </p>
+            <Link to="/app/employer/audits/new" className="btn">
+              {t("employerHomeRunNewAudit")}
+            </Link>
+          </div>
+        ) : (
+          <div className="health-grid">
+            {/* Ghost rate by carrier */}
+            <div className="card">
+              <h3 style={{ marginBottom: "0.85rem" }}>
+                {t("employerHealthGhostByCarrier")}
+              </h3>
+              <div>
+                {agg.byCarrier.map((row) => (
+                  <div key={row.carrier} className="ghost-bar-row">
+                    <div className="ghost-bar-row__name">{row.carrier}</div>
+                    <div className="ghost-bar-track" aria-hidden="true">
+                      <div
+                        className="ghost-bar-fill"
+                        style={{ width: `${Math.round(row.ghostRate * 100)}%` }}
+                      />
+                    </div>
+                    <div className="ghost-bar-row__val mono-id">
+                      {(row.ghostRate * 100).toFixed(0)}%
+                    </div>
+                    <div className="ghost-bar-row__count">
+                      {row.audits} {row.audits === 1 ? "audit" : "audits"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Financial exposure */}
+            <div className="card">
+              <h3 style={{ marginBottom: "0.6rem" }}>
+                {t("employerHealthExposureTitle")}
+              </h3>
+              <p className="lede" style={{ fontSize: "0.85rem", marginBottom: "0.6rem" }}>
+                {t("employerHealthExposureNote")}
+              </p>
+              <label
+                style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.85rem" }}
+              >
+                <span style={{ fontSize: "0.8rem", color: "var(--muted)" }}>
+                  {t("employerHealthExposureHeadcount")}
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  step={50}
+                  value={headcount}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    if (Number.isFinite(n) && n > 0) setHeadcount(n);
+                  }}
+                  style={{ width: 120 }}
+                />
+              </label>
+              <div className="exposure-amount">{formatUsd(exposure)}</div>
+              <div className="exposure-sub">{t("employerHealthExposureSub")}</div>
+            </div>
+
+            {/* Broken specialty callouts */}
+            {agg.brokenSpecialties.length > 0 ? (
+              <div className="card">
+                <h3 style={{ marginBottom: "0.6rem" }}>
+                  {t("employerHealthBrokenTitle")}
+                </h3>
+                <ul style={{ margin: 0, paddingLeft: "1.1rem" }}>
+                  {agg.brokenSpecialties.map((b) => (
+                    <li key={b.need} style={{ marginBottom: "0.4rem" }}>
+                      <strong>{b.need}</strong> —{" "}
+                      <span style={{ color: "var(--muted)" }}>
+                        {t("employerHealthBrokenRow", { n: b.auditsWithNeed })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {/* Coverage gaps by ZIP */}
+            <div className="card">
+              <h3 style={{ marginBottom: "0.6rem" }}>
+                {t("employerHealthGapsTitle")}
+              </h3>
+              {agg.byZip.length === 0 ? (
+                <p className="lede" style={{ marginBottom: 0 }}>
+                  {t("employerHealthGapsEmpty")}
+                </p>
+              ) : (
+                <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none" }}>
+                  {agg.byZip.slice(0, 5).map((z) => (
+                    <li key={z.zip} className="gap-row">
+                      <span className="mono-id">ZIP {z.zip}</span>
+                      <span style={{ color: "var(--muted)" }}>
+                        {t("employerHealthGapRow", {
+                          real: z.realCount,
+                          ghost: z.ghostCount,
+                          audits: z.audits,
+                        })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

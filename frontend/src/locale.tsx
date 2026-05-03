@@ -375,6 +375,26 @@ const DICT: Record<Locale, Record<string, string>> = {
     employerDetailMissingTitle: "Audit not found",
     employerDetailMissing:
       "We couldn't find this audit. If it was simulated in another browser, it will not appear here.",
+
+    // ── Employer network health (aggregate view) ───────────────
+    employerHealthTitle: "Network health",
+    employerHealthRunning: "{n} running",
+    employerHealthEmpty:
+      "Run a network audit to populate your renewal-ready dashboard. We'll roll up ghost rates, coverage gaps, and a financial-exposure estimate as audits complete.",
+    employerHealthGhostByCarrier: "Ghost rate by carrier",
+    employerHealthExposureTitle: "Financial exposure (sketch)",
+    employerHealthExposureNote:
+      "Headcount × 10% baseline behavioral-health prevalence × weighted ghost rate × $4,783/year per untreated case. Order-of-magnitude planning anchor only.",
+    employerHealthExposureHeadcount: "Headcount",
+    employerHealthExposureSub: "Illustrative annual exposure",
+    employerHealthBrokenTitle: "Broken specialty callouts",
+    employerHealthBrokenRow: "0 real providers across {n} audit(s) asking for this need.",
+    employerHealthGapsTitle: "Coverage gaps by ZIP",
+    employerHealthGapsEmpty: "No ZIP-level gaps yet — all audited ZIPs returned at least one real listing.",
+    employerHealthGapRow: "{real} real · {ghost} ghost · {audits} audit(s)",
+
+    employerDownloadReport: "Download renewal report (PDF)",
+    employerDownloadReportEmptyTitle: "Run an audit first to generate a report.",
   },
 };
 
