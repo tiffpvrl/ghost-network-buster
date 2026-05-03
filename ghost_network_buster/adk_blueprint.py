@@ -59,9 +59,12 @@ mental health care (e.g. "we're a cardiology office", "we don't do therapy").
   "not_accepting_patients" — the practice accepts the carrier for behavioral \
 health but is currently CLOSED TO NEW PATIENTS.
   "wrong_provider"         — the number belongs to a completely different \
-practice or person than listed in the directory.
-  "retired"                — the provider is retired, deceased, or no longer \
-practicing at this location.
+practice or person than listed in the directory. This includes cases where the \
+  provider is still practicing but is no longer at this location.
+  "retired"                — the provider has stopped practicing in general \
+    (i.e. is retired, deceased, has closed their practice, or is no longer \
+      licensed). This is different from when a provider is still practicing \
+        but is no longer at this location.
   "wrong_specialty"        — listed as behavioral health but the practice \
 confirmed they are a different specialty entirely.
   "referral_only"          — the practice requires a referral not disclosed in \
