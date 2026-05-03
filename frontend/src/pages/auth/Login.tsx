@@ -39,6 +39,16 @@ export default function Login() {
 
   return (
     <div className="auth-page">
+      <div className="mktg-auth-brand">
+        <div className="brand-mark">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 2C5.24 2 3 4.24 3 7v5l2 2 1-1 1 1 1-1 1 1 1-1 2-2V7c0-2.76-2.24-5-5-5Z" />
+            <circle cx="6" cy="8" r="0.8" fill="currentColor" stroke="none" />
+            <circle cx="10" cy="8" r="0.8" fill="currentColor" stroke="none" />
+          </svg>
+        </div>
+        <span className="mktg-auth-brand__name">Ghost Network Buster</span>
+      </div>
       <div className="auth-card">
         <div className="auth-card__eyebrow">{t("authLoginEyebrow")}</div>
         <h1 className="auth-card__title">{t("authLoginTitle")}</h1>

@@ -3,6 +3,14 @@ import { useLocale } from "../../locale";
 
 const PRICE = import.meta.env.VITE_PRICE_PER_AUDIT_USD ?? "49";
 
+function IconCheck() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" style={{ width: 15, height: 15, flexShrink: 0, color: "var(--real)" }}>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
 export default function Pricing() {
   const { t } = useLocale();
 
@@ -22,11 +30,11 @@ export default function Pricing() {
             <span className="price-card__value">{PRICE}</span>
             <span className="price-card__unit">{t("pricingPerAudit")}</span>
           </div>
-          <ul className="price-card__list">
-            <li>{t("pricingIncl1")}</li>
-            <li>{t("pricingIncl2")}</li>
-            <li>{t("pricingIncl3")}</li>
-            <li>{t("pricingIncl4")}</li>
+          <ul className="price-card__list price-card__list--check">
+            <li><IconCheck /><span>{t("pricingIncl1")}</span></li>
+            <li><IconCheck /><span>{t("pricingIncl2")}</span></li>
+            <li><IconCheck /><span>{t("pricingIncl3")}</span></li>
+            <li><IconCheck /><span>{t("pricingIncl4")}</span></li>
           </ul>
           <Link to="/signup" className="btn full">
             {t("pricingCta")}
