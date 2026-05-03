@@ -146,19 +146,37 @@ class SttInterimCommitProcessor(FrameProcessor):
                         name="stt_interim_commit",
                     )
                 elif snap:
-                    _log = logger.info if self._diagnostics_enabled else logger.debug
-                    _log(
-                        "STT: VAD user stopped but interim too short to commit (%d chars, need %d): %r",
-                        len(snap),
-                        self._min_chars,
-                        snap[:120],
-                    )
+                    if self._diagnostics_enabled:
+                        from loguru import logger as ur  # noqa: PLC0415
+
+                        ur.info(
+                            "STT: VAD user stopped but interim too short to commit "
+                            "({} chars, need {}): {!r}",
+                            len(snap),
+                            self._min_chars,
+                            snap[:120],
+                        )
+                    else:
+                        logger.debug(
+                            "STT: VAD user stopped but interim too short to commit "
+                            "(%d chars, need %d): %r",
+                            len(snap),
+                            self._min_chars,
+                            snap[:120],
+                        )
                 else:
-                    _log = logger.info if self._diagnostics_enabled else logger.debug
-                    _log(
-                        "STT: VAD user stopped with no Deepgram interim yet — "
-                        "if this repeats, check audio/Deepgram or raise VOICE_VAD_STOP_SECS"
-                    )
+                    if self._diagnostics_enabled:
+                        from loguru import logger as ur  # noqa: PLC0415
+
+                        ur.info(
+                            "STT: VAD user stopped with no Deepgram interim yet — "
+                            "check 8 kHz STT alignment, Deepgram, or VOICE_VAD_STOP_SECS"
+                        )
+                    else:
+                        logger.debug(
+                            "STT: VAD user stopped with no Deepgram interim yet "
+                            "(check audio/Deepgram or raise VOICE_VAD_STOP_SECS)"
+                        )
             return
 
         if isinstance(frame, (EndFrame, CancelFrame)):

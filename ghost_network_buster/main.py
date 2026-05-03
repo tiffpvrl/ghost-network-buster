@@ -648,10 +648,12 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
             hypothesis_id="H5_stream",
         )
 
+        from loguru import logger as loguru_logger  # noqa: PLC0415
+
         transcript_lines: list[str] = []
 
         class _SttTraceLogger(FrameProcessor):
-            """When enabled, INFO-log raw Deepgram interims and finals (before interim-commit / dedupe)."""
+            """When enabled, log raw Deepgram interims/finals via loguru (same output as Pipecat DEBUG lines)."""
 
             def __init__(self, enabled: bool, *, call_label: str) -> None:
                 super().__init__()
@@ -666,12 +668,20 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                         t = (frame.text or "").strip()
                         if t and t != self._last_interim_logged:
                             self._last_interim_logged = t
-                            logger.info("[%s] STT interim %r", self._call_label, t[:800])
+                            loguru_logger.info(
+                                "[{}] STT interim: {}",
+                                self._call_label,
+                                t[:800],
+                            )
                     elif isinstance(frame, TranscriptionFrame):
                         t = (frame.text or "").strip()
                         self._last_interim_logged = ""
                         if t:
-                            logger.info("[%s] STT final %r", self._call_label, t[:800])
+                            loguru_logger.info(
+                                "[{}] STT final: {}",
+                                self._call_label,
+                                t[:800],
+                            )
                 await self.push_frame(frame, direction)
 
         class TranscriptCapture(FrameProcessor):
@@ -881,6 +891,9 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
             params=FastAPIWebsocketParams(
                 audio_in_enabled=True,
                 audio_out_enabled=True,
+                # Twilio μ-law is 8 kHz; PCM after decode must match Deepgram STT `sample_rate`.
+                audio_in_sample_rate=settings.deepgram_stt_sample_rate,
+                audio_out_sample_rate=settings.deepgram_tts_sample_rate,
                 serializer=serializer,
             ),
         )
@@ -995,7 +1008,20 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
             f"does your practice currently accept {carrier_hint} insurance, and are you accepting new patients?"
         )
 
-        task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True))
+        task = PipelineTask(
+            pipeline,
+            params=PipelineParams(
+                audio_in_sample_rate=settings.deepgram_stt_sample_rate,
+                audio_out_sample_rate=settings.deepgram_tts_sample_rate,
+            ),
+        )
+        loguru_logger.info(
+            "Pipecat call {}: audio_in_sample_rate={} Hz (Twilio decode → Deepgram STT), "
+            "audio_out_sample_rate={} Hz (TTS → Twilio)",
+            call_id,
+            settings.deepgram_stt_sample_rate,
+            settings.deepgram_tts_sample_rate,
+        )
 
         @transport.event_handler("on_client_connected")
         async def on_connect(_transport, _client):  # type: ignore[misc]
