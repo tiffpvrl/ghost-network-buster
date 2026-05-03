@@ -3,11 +3,14 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/AuthProvider";
 import {
   estimateExposureUsd,
+  flatEvidenceRows,
   loadEmployerAggregates,
   type EmployerAggregates,
 } from "../../data/employerAggregates";
 import { listByCreatedAt, type EmployerBatch } from "../../data/employerBatches";
-import { downloadRenewalReport } from "../../lib/renewalReport";
+import { downloadFindingsMemo } from "../../lib/renewalReport";
+import { downloadExecutiveSummary } from "../../lib/executiveSummary";
+import { downloadEvidenceCsv } from "../../lib/evidenceCsv";
 import { useLocale } from "../../locale";
 
 const DEFAULT_HEADCOUNT = 500;
@@ -26,6 +29,8 @@ export default function EmployerHome() {
   const [recent] = useState<EmployerBatch[]>(() => listByCreatedAt().slice(0, 5));
   const [headcount, setHeadcount] = useState<number>(DEFAULT_HEADCOUNT);
   const [agg, setAgg] = useState<EmployerAggregates>(() => loadEmployerAggregates());
+  const [orgName, setOrgName] = useState<string>("");
+  const [benefitsLead, setBenefitsLead] = useState<string>("");
 
   // Refresh aggregates every 2s while any batch is still running, otherwise
   // every 8s so newly completed batches surface without manual reload.
@@ -47,9 +52,28 @@ export default function EmployerHome() {
 
   const exposure = useMemo(() => estimateExposureUsd(agg, headcount), [agg, headcount]);
   const hasData = agg.totals.audits > 0;
+  const disabledTitle = hasData ? "" : t("employerPacketDisabledTitle");
 
-  function handleDownload() {
-    downloadRenewalReport(agg, { headcount });
+  function handleMemo() {
+    if (!hasData) return;
+    downloadFindingsMemo(agg, {
+      headcount,
+      orgName: orgName.trim() || undefined,
+      benefitsLead: benefitsLead.trim() || undefined,
+    });
+  }
+
+  function handleExec() {
+    if (!hasData) return;
+    downloadExecutiveSummary(agg, {
+      headcount,
+      orgName: orgName.trim() || undefined,
+    });
+  }
+
+  function handleCsv() {
+    if (!hasData) return;
+    downloadEvidenceCsv(flatEvidenceRows());
   }
 
   return (
@@ -75,15 +99,6 @@ export default function EmployerHome() {
           <Link to="/app/employer/audits/new" className="btn">
             {t("employerHomeRunNewAudit")}
           </Link>
-          <button
-            type="button"
-            className="btn secondary"
-            onClick={handleDownload}
-            disabled={!hasData}
-            title={hasData ? "" : t("employerDownloadReportEmptyTitle")}
-          >
-            {t("employerDownloadReport")}
-          </button>
           {employerTier === null ? (
             <Link to="/pricing" className="btn secondary">
               {t("employerHomeSelectPlan")}
@@ -260,6 +275,80 @@ export default function EmployerHome() {
             </div>
           </div>
         )}
+      </section>
+
+      <section className="section">
+        <h2 className="section__title">{t("employerPacketTitle")}</h2>
+        <div className="card">
+          <p className="lede" style={{ marginBottom: "0.4rem" }}>
+            {t("employerPacketBody")}
+          </p>
+
+          <h3 style={{ margin: "0.85rem 0 0", fontSize: "0.95rem" }}>
+            {t("employerReportContextTitle")}
+          </h3>
+          <p
+            style={{
+              margin: "0.2rem 0 0",
+              fontSize: "0.78rem",
+              color: "var(--muted)",
+            }}
+          >
+            {t("employerReportContextHelp")}
+          </p>
+          <div className="report-context">
+            <label>
+              <span>{t("employerReportContextOrg")}</span>
+              <input
+                type="text"
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                placeholder={t("employerReportContextOrgPlaceholder")}
+                maxLength={120}
+              />
+            </label>
+            <label>
+              <span>{t("employerReportContextLead")}</span>
+              <input
+                type="text"
+                value={benefitsLead}
+                onChange={(e) => setBenefitsLead(e.target.value)}
+                placeholder={t("employerReportContextLeadPlaceholder")}
+                maxLength={120}
+              />
+            </label>
+          </div>
+
+          <div className="packet-actions">
+            <button
+              type="button"
+              className="btn"
+              onClick={handleMemo}
+              disabled={!hasData}
+              title={disabledTitle}
+            >
+              {t("employerPacketMemoCta")}
+            </button>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={handleExec}
+              disabled={!hasData}
+              title={disabledTitle}
+            >
+              {t("employerPacketExecCta")}
+            </button>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={handleCsv}
+              disabled={!hasData}
+              title={disabledTitle}
+            >
+              {t("employerPacketCsvCta")}
+            </button>
+          </div>
+        </div>
       </section>
     </div>
   );

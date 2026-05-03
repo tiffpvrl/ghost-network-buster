@@ -200,3 +200,72 @@ export function estimateExposureUsd(
       PRODUCTIVITY_LOSS_PER_UNTREATED_USD,
   );
 }
+
+/** One audited listing — the unit emitted to the evidence CSV. */
+export type EvidenceRow = {
+  auditDate: string; // ISO from started_at (or empty string)
+  carrier: string;
+  zip: string;
+  auditId: string;
+  npi: string;
+  providerName: string | null;
+  status: "real" | "ghost" | "voicemail" | "no_answer" | "error";
+  ghostReason: string | null;
+  summary: string | null;
+  verifiedAt: string | null;
+};
+
+/**
+ * Per-call evidence rows across every batch in localStorage. Sorted by
+ * (auditDate desc, carrier asc, zip asc) so the carrier sees recent activity
+ * first.
+ */
+export function flatEvidenceRows(): EvidenceRow[] {
+  const rows: EvidenceRow[] = [];
+  for (const batch of listBatches()) {
+    for (const child of batch.audits) {
+      if (!isSimAuditId(child.id)) continue;
+      const s = getSimSummary(child.id);
+      if (!s) continue;
+      const auditDate = s.started_at ?? batch.createdAt ?? "";
+      for (const r of s.results) {
+        rows.push({
+          auditDate,
+          carrier: s.carrier,
+          zip: s.zip_code,
+          auditId: s.audit_id,
+          npi: r.npi,
+          providerName: r.provider_name ?? null,
+          status: r.status,
+          ghostReason: r.ghost_reason ?? null,
+          summary: r.summary ?? null,
+          verifiedAt: r.verified_at ?? null,
+        });
+      }
+    }
+  }
+  rows.sort((a, b) => {
+    if (a.auditDate !== b.auditDate) return a.auditDate < b.auditDate ? 1 : -1;
+    if (a.carrier !== b.carrier) return a.carrier < b.carrier ? -1 : 1;
+    if (a.zip !== b.zip) return a.zip < b.zip ? -1 : 1;
+    return 0;
+  });
+  return rows;
+}
+
+/** Min/max started_at across all simulated audits — used in report headers. */
+export function derivePeriod(): { from: string; to: string } | null {
+  let min: string | null = null;
+  let max: string | null = null;
+  for (const batch of listBatches()) {
+    for (const child of batch.audits) {
+      if (!isSimAuditId(child.id)) continue;
+      const s = getSimSummary(child.id);
+      if (!s || !s.started_at) continue;
+      if (min == null || s.started_at < min) min = s.started_at;
+      if (max == null || s.started_at > max) max = s.started_at;
+    }
+  }
+  if (min == null || max == null) return null;
+  return { from: min, to: max };
+}

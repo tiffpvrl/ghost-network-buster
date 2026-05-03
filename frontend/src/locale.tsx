@@ -393,8 +393,21 @@ const DICT: Record<Locale, Record<string, string>> = {
     employerHealthGapsEmpty: "No ZIP-level gaps yet — all audited ZIPs returned at least one real listing.",
     employerHealthGapRow: "{real} real · {ghost} ghost · {audits} audit(s)",
 
-    employerDownloadReport: "Download renewal report (PDF)",
-    employerDownloadReportEmptyTitle: "Run an audit first to generate a report.",
+    // ── Negotiation packet ─────────────────────────────────────
+    employerPacketTitle: "Negotiation packet",
+    employerPacketBody:
+      "Generate a counsel-ready packet from your audit history. Review every artifact with counsel before submission to the carrier.",
+    employerPacketMemoCta: "Download findings memo (PDF)",
+    employerPacketExecCta: "Download executive summary (PDF)",
+    employerPacketCsvCta: "Export evidence (CSV)",
+    employerPacketDisabledTitle: "Run an audit first to generate the packet.",
+    employerReportContextTitle: "Report context",
+    employerReportContextHelp:
+      "Used in the memorandum header and signature block. Counsel will redline; placeholders are fine.",
+    employerReportContextOrg: "Organization name",
+    employerReportContextOrgPlaceholder: "Acme Inc.",
+    employerReportContextLead: "Benefits lead",
+    employerReportContextLeadPlaceholder: "Jane Doe",
   },
 };
 
