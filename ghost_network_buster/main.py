@@ -612,6 +612,26 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
         }:
             return True
         return bool(re.fullmatch(r"[\d\s\-\.\(\)]+", s)) and len(s) <= 14
+
+    def _stt_may_be_mid_sentence(text: str) -> bool:
+        """True when STT looks like a mid-phrase cut (common on a short pause mid sentence)."""
+        s = text.strip()
+        if len(s) >= 88:
+            return False
+        low = s.lower().rstrip(".?!,")
+        suffixes = (
+            " so we are not",
+            " we are not",
+            " we're not",
+            " we arent",
+            " we aren't",
+            " we do not",
+            " we don't",
+            " we dont",
+        )
+        if any(low.endswith(x) for x in suffixes):
+            return True
+        return len(low) <= 55 and low.endswith(" not")
     settings: Settings = websocket.app.state.settings
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -734,11 +754,17 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
             f"do NOT say you are calling on behalf of a new patient again unless they ask who is calling. "
             f"Your goal is to verify whether the practice accepts {carrier_hint} for behavioral health "
             "and is accepting new patients. "
-            "If they clearly say they do NOT accept new patients or are not accepting, trust that answer, "
-            "thank them briefly, say goodbye, and do NOT ask the same question again. "
-            "Reply in at most two short sentences. Stay on topic; do not invent appointments, doctors, or addresses. "
-            "When the provider answers your question, acknowledge briefly (e.g. yes/no/clarifying question), "
-            "then if you have a clear answer say 'Thank you so much, have a great day!' and stop. "
+            "Live phone transcription is imperfect and often arrives in fragments: if the provider's last "
+            "message looks cut off mid-thought, trails off, or only answers part of the question (e.g. starts with "
+            "'we are not' or 'we don't' without finishing what applies), do NOT conclude or say goodbye — ask "
+            f"one short follow-up to confirm both {carrier_hint} acceptance and whether they take new patients. "
+            "Only when you have a clear, complete answer on BOTH points should you thank them and say goodbye. "
+            "If they clearly and completely say they do NOT accept new patients (full thought, not a fragment), "
+            "trust that, thank them briefly, say goodbye, and do NOT re-ask the whole script. "
+            "Reply in at most two short sentences unless you need one brief clarifying question. "
+            "Stay on topic; do not invent appointments, doctors, or addresses. "
+            "When the provider fully answers, acknowledge briefly, then if you have a clear answer say "
+            "'Thank you so much, have a great day!'. "
             "If their reply is unclear or sounds like a phone menu, ask one short clarifying question — "
             f"without repeating the long introduction — about {carrier_hint} and new patients. "
             "If asked, say honestly that you are an AI assistant. Keep the call under 90 seconds."
@@ -783,7 +809,18 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                         await self.push_frame(LLMTextFrame(text=canned))
                         await self.push_frame(LLMFullResponseEndFrame())
                         return
-                    self._history.append({"role": "user", "parts": [{"text": raw}]})
+                    hint = ""
+                    if _stt_may_be_mid_sentence(raw):
+                        hint = (
+                            "(System: this transcript may be truncated mid-sentence from phone audio — "
+                            f"if it does not clearly settle BOTH {carrier_hint} coverage and new patients, "
+                            "ask one short follow-up; do not thank them and close the call yet.)\n\n"
+                        )
+                        logger.info(
+                            "Pipecat: mid-sentence STT hint for LLM context: %r",
+                            raw[:120],
+                        )
+                    self._history.append({"role": "user", "parts": [{"text": hint + raw}]})
                     await self.push_frame(LLMFullResponseStartFrame())
                     model_id = settings.vertex_pipecat_llm_model
                     reply = ""

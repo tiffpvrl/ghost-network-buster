@@ -45,11 +45,11 @@ class Settings(BaseSettings):
     deepgram_stt_model: str = "nova-3-general"
     deepgram_stt_language: str = "en-US"
     deepgram_stt_sample_rate: int = Field(default=8000, ge=8000, le=48000)
-    deepgram_stt_utterance_end_ms: int = Field(default=600, ge=100, le=5000)
+    deepgram_stt_utterance_end_ms: int = Field(default=1200, ge=100, le=5000)
     deepgram_stt_smart_format: bool = True
     deepgram_stt_interim_results: bool = True
     # Endpointing: Deepgram accepts ms (e.g. 300) or boolean; 0 = omit (API default)
-    deepgram_stt_endpointing_ms: int = Field(default=300, ge=0, le=10000)
+    deepgram_stt_endpointing_ms: int = Field(default=550, ge=0, le=10000)
     # Deepgram TTS (Twilio output is resampled to 8 kHz µ-law in the serializer)
     deepgram_tts_voice: str = "aura-2-helena-en"
     deepgram_tts_sample_rate: int = Field(default=24000, ge=8000, le=48000)
@@ -59,13 +59,13 @@ class Settings(BaseSettings):
     # After VAD stop, if Deepgram never emits a final (common on very short utterances), promote the
     # last interim transcript to a synthetic TranscriptionFrame after this delay.
     voice_stt_interim_commit_enabled: bool = True
-    voice_stt_interim_commit_delay_ms: int = Field(default=450, ge=0, le=3000)
+    voice_stt_interim_commit_delay_ms: int = Field(default=750, ge=0, le=3000)
     voice_stt_interim_commit_min_chars: int = Field(default=2, ge=1, le=32)
     # Log raw Deepgram interim + final lines to server stdout (dev / QA). May contain PHI — off in prod.
     voice_stt_trace_enabled: bool = False
     # Silero VAD (Pipecat): short stop_secs causes many user-stopped events mid-phrase on phone audio,
     # which fragments Deepgram utterances. Tune for Twilio 8 kHz if you see VAD spam but no STT.
-    voice_vad_stop_secs: float = Field(default=0.5, ge=0.15, le=2.0)
+    voice_vad_stop_secs: float = Field(default=0.85, ge=0.15, le=2.0)
     voice_vad_start_secs: float = Field(default=0.2, ge=0.05, le=1.0)
 
     # Cost guard: pipecat audits with more providers than this are rejected unless
