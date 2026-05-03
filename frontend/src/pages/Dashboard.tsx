@@ -373,7 +373,7 @@ export default function Dashboard() {
           <p className="lede" style={{ color: "var(--text)", marginBottom: "0.75rem" }}>
             {summary.error || "The audit stopped due to an error. Partial results may still be useful below."}
           </p>
-          <Link className="btn secondary" to="/">Start over</Link>
+          <Link className="btn secondary" to="/app/patient">Start over</Link>
         </div>
       ) : null}
 
@@ -454,9 +454,9 @@ export default function Dashboard() {
           <div className="cb-stat">{ghostPct}% of {summary?.carrier}&apos;s listed providers in {summary?.zip_code} failed verification as usable contacts</div>
           <p>We found {summary?.real_count} listings that passed as usable in this run. {summary?.top_providers.length} appear in the quick shortlist (accepting / in-network per reception).</p>
           <div className="cb-actions">
-            <Link className="btn" to={`/results/${auditId}`}>View your providers</Link>
+            <Link className="btn" to={`/app/patient/results/${auditId}`}>View your providers</Link>
             {summary?.complaint_eligible === true && (
-              <Link className="btn secondary" to={`/results/${auditId}`}>Generate complaint letter →</Link>
+              <Link className="btn secondary" to={`/app/patient/results/${auditId}`}>Generate complaint letter →</Link>
             )}
           </div>
         </div>
@@ -641,7 +641,7 @@ export default function Dashboard() {
           {doneAll && (
             <Link
               className="btn full"
-              to={`/results/${auditId}`}
+              to={`/app/patient/results/${auditId}`}
               style={{ marginTop: "1rem", display: "flex" }}
             >
               View full results →

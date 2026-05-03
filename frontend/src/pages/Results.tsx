@@ -60,7 +60,7 @@ export default function Results() {
   }, [auditId, isDemo]);
 
   async function copyShare() {
-    await navigator.clipboard.writeText(`${window.location.origin}/results/${auditId}`);
+    await navigator.clipboard.writeText(`${window.location.origin}/app/patient/results/${auditId}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -97,7 +97,7 @@ export default function Results() {
       <div className="results-page" role="alert">
         <h1>{title}</h1>
         <p className="lede">{body}</p>
-        <Link to="/" className="btn secondary print-hidden">
+        <Link to="/app/patient" className="btn secondary print-hidden">
           {t("newAudit")}
         </Link>
       </div>
@@ -418,7 +418,7 @@ export default function Results() {
           ))}
         </div>
 
-        <Link to="/" className="print-hidden" style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+        <Link to="/app/patient" className="print-hidden" style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
           {t("newAudit")}
         </Link>
       </div>

@@ -34,7 +34,7 @@ export default function AuditStepper({ auditId, doneAll, failed, realCount }: Pr
         —
       </span>
       {doneAll && !failed ? (
-        <Link className="stepper-step stepper-link" aria-current={current === 3 ? "step" : undefined} to={`/results/${auditId}`}>
+        <Link className="stepper-step stepper-link" aria-current={current === 3 ? "step" : undefined} to={`/app/patient/results/${auditId}`}>
           <span className="stepper-dot" aria-hidden />
           {t("stepperResults")}
         </Link>

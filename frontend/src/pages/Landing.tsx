@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, apiPost, apiProvidersPreview, type PlanType } from "../api";
+import { useAuth } from "../auth/AuthProvider";
 import { disclaimerRecording, disclaimerShort } from "../copy";
 import { DEMO_AUDIT_ID } from "../demo-data";
 import { useLocale } from "../locale";
@@ -60,6 +61,7 @@ export default function Landing() {
   const { t } = useLocale();
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
+  const { credits, consumeCredit } = useAuth();
   const [carrierPick, setCarrierPick] = useState(() =>
     PRESET_CARRIERS.includes("Aetna") ? "Aetna" : PRESET_CARRIERS[0] ?? "Aetna",
   );
@@ -85,9 +87,15 @@ export default function Landing() {
 
   useEffect(() => {
     if (searchParams.get("demo") === "true") {
-      nav(`/audit/${DEMO_AUDIT_ID}`);
+      nav(`/app/patient/audits/${DEMO_AUDIT_ID}`);
     }
   }, [searchParams, nav]);
+
+  // Credit gate: require ≥1 audit credit before showing the start-audit form.
+  // Demo audits are free, so allow ?demo=true to bypass.
+  if (credits < 1 && searchParams.get("demo") !== "true") {
+    return <Navigate to="/checkout?next=%2Fapp%2Fpatient%2Faudits%2Fnew" replace />;
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -159,8 +167,9 @@ export default function Landing() {
         recording_consent: consentRecord,
         terms_acknowledged: consentTerms,
       });
+      consumeCredit();
       await new Promise((r) => setTimeout(r, 500));
-      nav(`/audit/${audit_id}`);
+      nav(`/app/patient/audits/${audit_id}`);
     } catch (e) {
       if (e instanceof ApiError) {
         if (e.status === 401) setErr(t("authErrorBody"));
@@ -374,7 +383,7 @@ export default function Landing() {
           type="button"
           className="btn full secondary"
           disabled={busy}
-          onClick={() => nav(`/audit/${DEMO_AUDIT_ID}`)}
+          onClick={() => nav(`/app/patient/audits/${DEMO_AUDIT_ID}`)}
           style={{ fontSize: "0.75rem", padding: "0.6rem", marginTop: "0.5rem" }}
         >
           {t("landingDemo")}
