@@ -1,31 +1,35 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { AuditSummary, CallResult } from "../api";
-import { apiGet, downloadPdf } from "../api";
+import { ApiError, apiGet, downloadPdf } from "../api";
+import StatusLegend from "../components/StatusLegend";
 import { DEMO_AUDIT_ID, DEMO_SUMMARY } from "../demo-data";
+import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useLocale } from "../locale";
+import { ghostReasonLabelLong } from "../labels";
 
-function ghostReasonLabel(r?: string | null): string {
-  const map: Record<string, string> = {
-    disconnected: "Disconnected number",
-    wrong_network: "Wrong insurance",
-    no_behavioral_health: "No BH services",
-    not_accepting_patients: "Not accepting patients",
-    wrong_provider: "Wrong number / person",
-    retired: "Retired / moved",
-    wrong_specialty: "Wrong specialty",
-    referral_only: "Referral only",
-  };
-  return r ? (map[r] ?? r) : "";
+function formatVerifiedAt(iso?: string | null): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return iso;
+  }
 }
 
 export default function Results() {
+  const { t } = useLocale();
   const { auditId } = useParams();
   const isDemo = auditId === DEMO_AUDIT_ID;
   const [summary, setSummary] = useState<AuditSummary | null>(isDemo ? DEMO_SUMMARY : null);
-  const [err, setErr] = useState<string | null>(null);
+  const [loadErr, setLoadErr] = useState<{ status?: number; message: string } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [shareGate, setShareGate] = useState(false);
+
+  const closeShare = useCallback(() => setShareGate(false), []);
+  const shareTrapRef = useFocusTrap(shareGate, closeShare);
 
   useEffect(() => {
     if (!auditId || isDemo) return;
@@ -33,34 +37,109 @@ export default function Results() {
     (async () => {
       try {
         const s = await apiGet<AuditSummary>(`/api/summary/${auditId}`);
-        if (!cancelled) { setSummary(s); setErr(null); }
+        if (!cancelled) {
+          setSummary(s);
+          setLoadErr(null);
+        }
       } catch (e) {
-        if (!cancelled) setErr(e instanceof Error ? e.message : "Load failed");
+        if (!cancelled) {
+          if (e instanceof ApiError) {
+            setLoadErr({ status: e.status, message: e.message });
+          } else {
+            setLoadErr({
+              status: undefined,
+              message: e instanceof Error ? e.message : "Load failed",
+            });
+          }
+        }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [auditId, isDemo]);
 
   async function copyShare() {
-    await navigator.clipboard.writeText(`${window.location.origin}/results/${auditId}`);
+    await navigator.clipboard.writeText(`${window.location.origin}/app/patient/results/${auditId}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
 
   async function grab(path: string, filename: string, key: string) {
     setDownloading(key);
-    try { await downloadPdf(path, filename); }
-    finally { setDownloading(null); }
+    try {
+      await downloadPdf(path, filename);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        setLoadErr({ status: e.status, message: e.message });
+      }
+    } finally {
+      setDownloading(null);
+    }
   }
 
-  if (!auditId) return <p className="err">Missing audit id.</p>;
-  if (err) return <p className="err">{err}</p>;
-  if (!summary) return <p className="lede">Loading results…</p>;
+  if (!auditId) return <p className="err">{t("genericErrorTitle")}</p>;
+
+  if (loadErr && !summary) {
+    const title =
+      loadErr.status === 410
+        ? t("linkExpiredTitle")
+        : loadErr.status === 401
+          ? t("authErrorTitle")
+          : t("genericErrorTitle");
+    const body =
+      loadErr.status === 410
+        ? t("linkExpiredBody")
+        : loadErr.status === 401
+          ? t("authErrorBody")
+          : loadErr.message || t("genericErrorBody");
+    return (
+      <div className="results-page" role="alert">
+        <h1>{title}</h1>
+        <p className="lede">{body}</p>
+        <Link to="/app/patient" className="btn secondary print-hidden">
+          {t("newAudit")}
+        </Link>
+      </div>
+    );
+  }
+
+  if (!summary) return <p className="lede">{t("loadingResults")}</p>;
 
   const ghostPct = (summary.ghost_rate * 100).toFixed(1);
-  const isHigh = summary.ghost_rate >= 0.7;
+  const isHigh = summary.high_ghost_rate;
+  const zeroCompleted = summary.real_count === 0 && summary.status === "completed";
 
-  // Breakdown
+  let headline: string;
+  if (summary.status === "completed" && summary.real_count === 0) {
+    headline = t("resultsH1Zero", { total: summary.providers_total });
+  } else if (summary.high_ghost_rate && summary.real_count > 0) {
+    headline = t("resultsH1HighGhost", { n: summary.real_count, total: summary.providers_total });
+  } else {
+    headline = t("resultsH1Usable", { n: summary.real_count, total: summary.providers_total });
+  }
+
+  const planPart =
+    summary.plan_type && summary.plan_type !== "unsure"
+      ? t("planTypePrefix", { type: summary.plan_type })
+      : "";
+  const cardPart = summary.member_plan_label?.trim()
+    ? t("memberCardPrefix", { label: summary.member_plan_label.trim() })
+    : "";
+  const verifyNote = t("verifyContextNote", { carrier: summary.carrier, plan: planPart, card: cardPart });
+
+  const ledePieces: string[] = [];
+  if (summary.high_ghost_rate && summary.real_count > 0) {
+    ledePieces.push(t("resultsLedeMixed"));
+  }
+  if (summary.completed_at) {
+    ledePieces.push(`Completed (UTC reference): ${summary.completed_at}.`);
+  }
+  if (summary.care_needs.length) {
+    ledePieces.push(`Care needs asked about: ${summary.care_needs.join(", ")}.`);
+  }
+  ledePieces.push(verifyNote);
+
   const breakdown: Record<string, number> = {};
   for (const r of summary.results) {
     if (r.status === "ghost" && r.ghost_reason) {
@@ -70,26 +149,102 @@ export default function Results() {
   const breakdownEntries = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
 
   return (
-    <div>
-      {/* Header */}
-      <div style={{ marginBottom: "1.5rem" }}>
-        <div style={{ fontSize: "0.6rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--muted)", marginBottom: "0.4rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          Audit complete · {summary.carrier} · ZIP {summary.zip_code}
-          {isDemo && (
-            <span style={{ fontSize: "0.6rem", fontFamily: "var(--font-mono)", background: "var(--amber)", color: "#000", padding: "0.15rem 0.45rem", borderRadius: 2, letterSpacing: "0.1em" }}>
-              DEMO
-            </span>
-          )}
+    <div className="results-page">
+      {shareGate ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="share-modal-title">
+          <div ref={shareTrapRef} className="modal-panel card">
+            <h2 id="share-modal-title" style={{ marginBottom: "0.75rem" }}>
+              {t("shareModalTitle")}
+            </h2>
+            <p className="lede" style={{ marginBottom: "1rem" }}>
+              {t("shareModalBody")}
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <button type="button" className="btn secondary" onClick={closeShare}>
+                {t("shareModalCancel")}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  closeShare();
+                  void copyShare();
+                }}
+              >
+                {t("shareModalCopy")}
+              </button>
+            </div>
+          </div>
         </div>
-        <h1>We found {summary.real_count} real therapist{summary.real_count !== 1 ? "s" : ""} — out of {summary.providers_total} listed.</h1>
-        <p className="lede">
-          Verified today via direct AI phone calls.{" "}
-          {summary.care_needs.length ? `Care needs: ${summary.care_needs.join(", ")}.` : ""}
+      ) : null}
+
+      {loadErr ? (
+        <p className="err print-hidden" style={{ marginBottom: "0.75rem" }}>
+          {loadErr.message}
         </p>
+      ) : null}
+
+      <div className="results-section">
+        <div className="crisis-band print-hidden">
+          <div className="crisis-band__title">{t("noticesTitle")}</div>
+          <p className="crisis-band__body">
+            {t("crisis988Short")}{" "}
+            <a href="tel:988">988</a>
+            {" · "}
+            <a href="https://988lifeline.org/" rel="noopener noreferrer" target="_blank">
+              {t("crisisLinks")}
+            </a>
+            {" · "}
+            <a href="https://nycwell.cityofnewyork.us/" rel="noopener noreferrer" target="_blank">
+              {t("crisisNyc")}
+            </a>
+            {". "}
+            {t("noticesShareOnly")}
+          </p>
+        </div>
+
+        <div style={{ marginTop: "1.25rem" }}>
+          <div
+            style={{
+              fontSize: "0.68rem",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: "var(--muted)",
+              marginBottom: "0.4rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            {t("resultsMetaComplete")} · {summary.carrier} ·{" "}
+            <span className="mono-id">
+              ZIP {summary.zip_code}
+            </span>
+            {isDemo && (
+              <span
+                style={{
+                  fontSize: "0.65rem",
+                  fontFamily: "var(--font-mono)",
+                  background: "var(--amber-dim)",
+                  color: "var(--text)",
+                  padding: "0.15rem 0.45rem",
+                  borderRadius: 2,
+                  letterSpacing: "0.1em",
+                }}
+              >
+                DEMO
+              </span>
+            )}
+          </div>
+          <h1>{headline}</h1>
+          <p className="lede" style={{ marginBottom: 0 }}>
+            {ledePieces.join(" ")}
+          </p>
+        </div>
       </div>
 
-      {/* KPIs */}
-      <div className="kpi-row" style={{ marginBottom: "1.5rem" }}>
+      <div className="results-section">
+        <div className="kpi-row" style={{ marginBottom: "1rem" }}>
         <div className="kpi ghost-kpi">
           <div className="val">{ghostPct}%</div>
           <div className="lbl">Ghost rate</div>
@@ -108,53 +263,91 @@ export default function Results() {
         </div>
       </div>
 
-      {/* Complaint alert */}
+      <StatusLegend compact />
+
+      {zeroCompleted ? (
+        <div
+          className="card"
+          style={{
+            marginBottom: "1.5rem",
+            borderColor: "rgba(255,184,0,0.35)",
+            background: "linear-gradient(135deg, rgba(61,45,0,0.35) 0%, var(--surface) 100%)",
+          }}
+        >
+          <h2 style={{ color: "var(--text)", marginBottom: "0.65rem" }}>{t("zeroResultsTitle")}</h2>
+          <p className="lede" style={{ marginBottom: 0, maxWidth: "62ch" }}>
+            {t("zeroResultsBody")}
+          </p>
+        </div>
+      ) : null}
+
       {isHigh && (
         <div className="alert-bar" style={{ marginBottom: "1.5rem" }}>
-          <span>Your insurer's directory may violate federal law. {ghostPct}% ghost rate exceeds the threshold for NY DFS action.</span>
-          {summary.complaint_eligible && (
+          <span className="alert-icon" aria-hidden />
+          <span style={{ flex: 1 }}>{t("regulatoryAlert")}</span>
+          {summary.complaint_eligible ? (
             <button
               type="button"
-              className="btn"
-              style={{ flexShrink: 0, fontSize: "0.7rem" }}
+              className="btn print-hidden"
+              style={{ flexShrink: 0, fontSize: "0.72rem" }}
               disabled={downloading === "complaint"}
-              onClick={() => void grab(`/api/download/complaint/${auditId}`, `gnb-complaint-${auditId!.slice(0, 8)}.docx`, "complaint")}
+              onClick={() =>
+                void grab(`/api/download/complaint/${auditId}`, `gnb-complaint-${auditId!.slice(0, 8)}.docx`, "complaint")
+              }
             >
-              {downloading === "complaint" ? "Generating…" : "Generate Complaint Letter →"}
+              {downloading === "complaint" ? t("complaintGenerating") : t("resultsComplaintDraft")}
             </button>
-          )}
+          ) : null}
         </div>
       )}
 
-      {/* Top providers */}
-      <h2 style={{ marginBottom: "1rem" }}>Confirmed real providers</h2>
-      {summary.top_providers.length === 0 ? (
-        <p className="lede">No confirmed real providers in this audit.</p>
-      ) : (
-        summary.top_providers.map((p: CallResult) => (
+      </div>
+
+      <div className="results-section">
+        <h2 style={{ marginBottom: "1rem" }}>{t("shortlistHeading")}</h2>
+        {summary.top_providers.length === 0 ? (
+          <p className="lede">{t("shortlistEmpty")}</p>
+        ) : (
+          summary.top_providers.map((p: CallResult) => (
           <div key={p.npi} className="provider-card verified">
-            <div className="verified-badge">✓ VERIFIED REAL — Confirmed accepting {summary.carrier} today</div>
+            <div className="verified-badge">
+              {t("resultsUsableBadge", { when: formatVerifiedAt(p.verified_at) })}
+            </div>
             <h3>{p.provider_name || p.npi}</h3>
             {p.specialty && <div className="detail">● Specialty: {p.specialty}</div>}
-            <div className="detail highlight">● Accepts {summary.carrier} ✓</div>
-            <div className="detail highlight">● Accepting new patients ✓</div>
-            {p.summary && <div className="detail" style={{ marginTop: "0.5rem", fontStyle: "italic" }}>{p.summary}</div>}
-            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.85rem", flexWrap: "wrap" }}>
+            <div className="detail highlight">
+              ● Per call: aligned with {summary.carrier} inquiry (confirm member ID before booking).
+            </div>
+            <div className="detail highlight">
+              ● Per call: accepting new patients as described in transcript (always re-verify).
+            </div>
+            {p.summary && (
+              <div className="detail" style={{ marginTop: "0.5rem", fontStyle: "italic" }}>
+                {p.summary}
+              </div>
+            )}
+            <div className="print-hidden" style={{ display: "flex", gap: "0.5rem", marginTop: "0.85rem", flexWrap: "wrap" }}>
               <button type="button" className="btn secondary" onClick={() => setOpen(open === p.npi ? null : p.npi)}>
-                {open === p.npi ? "Hide transcript" : "View transcript"}
+                {open === p.npi ? t("resultsHideTranscript") : t("resultsViewTranscript")}
               </button>
+              {p.phone ? (
+                <span className="detail">
+                  {t("resultsPhoneOnFile")} {p.phone}
+                </span>
+              ) : null}
             </div>
             {open === p.npi && <pre className="mono" style={{ marginTop: "0.65rem" }}>{p.transcript}</pre>}
           </div>
-        ))
-      )}
+          ))
+        )}
+      </div>
 
-      {/* Downloads */}
-      <div className="card" style={{ marginTop: "1.5rem", marginBottom: "1.5rem" }}>
-        <h2>Downloads & sharing</h2>
+      <div className="results-section">
+        <div className="card print-hidden" style={{ marginBottom: 0 }}>
+        <h2>{t("downloadsHeading")}</h2>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-          <button type="button" className="btn secondary" onClick={() => void copyShare()}>
-            {copied ? "✓ Copied" : "Copy share link"}
+          <button type="button" className="btn secondary" onClick={() => setShareGate(true)}>
+            {copied ? t("shareModalCopied") : t("copyShareButton")}
           </button>
           <button
             type="button"
@@ -162,57 +355,73 @@ export default function Results() {
             disabled={downloading === "pdf"}
             onClick={() => void grab(`/api/download/summary/${auditId}`, `gnb-audit-${auditId!.slice(0, 8)}.pdf`, "pdf")}
           >
-            {downloading === "pdf" ? "Downloading…" : "Download audit summary (PDF)"}
+            {downloading === "pdf" ? t("resultsDownloading") : t("downloadPdf")}
+          </button>
+          <button
+            type="button"
+            className="btn secondary"
+            disabled={downloading === "csv"}
+            onClick={() => void grab(`/api/download/csv/${auditId}`, `gnb-audit-${auditId!.slice(0, 8)}.csv`, "csv")}
+          >
+            {downloading === "csv" ? t("resultsDownloading") : t("downloadCsv")}
           </button>
           <button
             type="button"
             className="btn secondary"
             disabled={!summary.complaint_eligible || downloading === "complaint"}
-            title={summary.complaint_eligible ? "" : "Unlocks when ghost rate ≥ 70%"}
+            title={summary.complaint_eligible ? "" : "Requires at least one ghost (failed) listing"}
             onClick={() => void grab(`/api/download/complaint/${auditId}`, `gnb-complaint-${auditId!.slice(0, 8)}.docx`, "complaint")}
           >
-            {downloading === "complaint" ? "Generating…" : "Download complaint draft"}
+            {downloading === "complaint" ? t("complaintGenerating") : t("downloadComplaint")}
           </button>
         </div>
       </div>
+      </div>
 
-      {/* Ghost breakdown */}
-      {breakdownEntries.length > 0 && (
-        <div className="card" style={{ marginBottom: "1.5rem" }}>
-          <h2>Ghost breakdown</h2>
-          {breakdownEntries.map(([reason, count]) => (
-            <div key={reason} className="bar-row">
-              <div className="lbl">{ghostReasonLabel(reason)}</div>
-              <div className="bar-track">
-                <div className="bar-fill" style={{ width: `${Math.min(100, (count / Math.max(summary.ghost_count, 1)) * 100)}%` }} />
+      {breakdownEntries.length > 0 ? (
+        <div className="results-section">
+          <div className="card" style={{ marginBottom: 0 }}>
+            <h2>{t("resultsGhostBreakdown")}</h2>
+            {breakdownEntries.map(([reason, count]) => (
+              <div key={reason} className="bar-row">
+                <div className="lbl">{ghostReasonLabelLong(reason)}</div>
+                <div className="bar-track">
+                  <div
+                    className="bar-fill"
+                    style={{ width: `${Math.min(100, (count / Math.max(summary.ghost_count, 1)) * 100)}%` }}
+                  />
+                </div>
+                <div className="count">{count}</div>
               </div>
-              <div className="count">{count}</div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="results-section results-section--tail">
+        <h2 style={{ marginBottom: "0.75rem" }}>{t("allCallsHeading")}</h2>
+        <div className="tile-grid" style={{ marginBottom: "1.25rem" }}>
+          {summary.results.map((row) => (
+            <div
+              key={`${row.npi}-${row.verified_at}`}
+              className={`tile ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem" }}>
+                <span className="name">{row.provider_name || row.npi}</span>
+                <span className={`pill ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}>
+                  {row.status}
+                </span>
+              </div>
+              {row.ghost_reason && <div className="meta">{ghostReasonLabelLong(row.ghost_reason)}</div>}
+              {row.summary && !row.ghost_reason && <div className="meta">{row.summary.slice(0, 55)}</div>}
             </div>
           ))}
         </div>
-      )}
 
-      {/* All calls */}
-      <h2 style={{ marginBottom: "0.75rem" }}>All calls</h2>
-      <div className="tile-grid" style={{ marginBottom: "2rem" }}>
-        {summary.results.map((t) => (
-          <div
-            key={`${t.npi}-${t.verified_at}`}
-            className={`tile ${t.status === "real" ? "real" : t.status === "ghost" ? "ghost" : "voicemail"}`}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem" }}>
-              <span className="name">{t.provider_name || t.npi}</span>
-              <span className={`pill ${t.status === "real" ? "real" : t.status === "ghost" ? "ghost" : "voicemail"}`}>
-                {t.status}
-              </span>
-            </div>
-            {t.ghost_reason && <div className="meta">{ghostReasonLabel(t.ghost_reason)}</div>}
-            {t.summary && !t.ghost_reason && <div className="meta">{t.summary.slice(0, 55)}</div>}
-          </div>
-        ))}
+        <Link to="/app/patient" className="print-hidden" style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+          {t("newAudit")}
+        </Link>
       </div>
-
-      <Link to="/" style={{ fontSize: "0.75rem", color: "var(--muted)" }}>← New audit</Link>
     </div>
   );
 }

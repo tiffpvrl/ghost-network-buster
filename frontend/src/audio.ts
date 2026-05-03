@@ -3,6 +3,21 @@
  * No files, no dependencies — all tones generated at runtime.
  */
 
+const SOUND_KEY = "gnb_sound_enabled";
+
+export function isSoundEnabled(): boolean {
+  if (typeof window === "undefined") return true;
+  const v = localStorage.getItem(SOUND_KEY);
+  if (v === null) {
+    return !window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  }
+  return v === "1";
+}
+
+export function setSoundEnabled(on: boolean): void {
+  localStorage.setItem(SOUND_KEY, on ? "1" : "0");
+}
+
 let _ctx: AudioContext | null = null;
 
 function getCtx(): AudioContext {
@@ -48,6 +63,7 @@ export function playCallSound(
   status: string,
   ghostReason?: string | null,
 ): void {
+  if (!isSoundEnabled()) return;
   const ac = getCtx();
   const t = ac.currentTime;
 
@@ -80,6 +96,7 @@ export function playCallSound(
  * Short triumphant C-E-G-C arpeggio played when the audit completes.
  */
 export function playComplete(): void {
+  if (!isSoundEnabled()) return;
   const ac = getCtx();
   const t = ac.currentTime;
   const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6

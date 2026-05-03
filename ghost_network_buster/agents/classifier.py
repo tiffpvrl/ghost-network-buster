@@ -1,11 +1,15 @@
-"""Hybrid transcript classification: keyword fast-path + Gemini LLM fallback."""
+"""Hybrid transcript classification: keyword fast-path + ADK LlmAgent (Vertex)."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import os
 import re
 from typing import Literal
+
+from ghost_network_buster.adk_blueprint import build_classifier_agent, run_agent_async
 
 logger = logging.getLogger(__name__)
 
@@ -29,88 +33,59 @@ def _keyword_classify(t: str, carrier_hint: str) -> tuple[Status, str | None, st
 
 
 # ---------------------------------------------------------------------------
-# Gemini LLM fallback
+# ADK LlmAgent (shared instruction with adk_blueprint.classifier_agent)
 # ---------------------------------------------------------------------------
 
-_CLASSIFICATION_PROMPT = """You are an expert at analyzing phone call transcripts between an AI auditor and a medical practice receptionist.
+def _parse_llm_classifier_json(raw: str) -> tuple[Status, str | None, str]:
+    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw.strip(), flags=re.MULTILINE).strip()
+    data = json.loads(cleaned)
 
-The auditor is verifying whether the practice accepts {carrier} insurance for behavioral health services and is accepting new patients.
+    status = data.get("status", "no_answer")
+    if status not in ("real", "ghost", "voicemail", "no_answer", "error"):
+        status = "no_answer"
 
-Transcript:
-<transcript>
-{transcript}
-</transcript>
-
-Classify the outcome using EXACTLY one of these statuses:
-- "real"      — practice confirmed they accept {carrier} for behavioral health and are taking new patients
-- "ghost"     — practice is listed in the {carrier} directory but is effectively inaccessible (see ghost_reason)
-- "voicemail" — reached voicemail or answering machine; no human confirmed anything
-- "no_answer" — call unanswered, or transcript too short/unclear to determine outcome
-
-If status is "ghost", set ghost_reason to EXACTLY one of:
-- "disconnected"           — number not in service, dead line, or rings with no answer
-- "wrong_network"          — practice confirmed they do not accept {carrier} (dropped contract, never accepted, out of network)
-- "no_behavioral_health"   — practice accepts {carrier} but does NOT offer behavioral health / mental health services
-- "not_accepting_patients" — practice accepts {carrier} for behavioral health but is closed to new patients
-- "wrong_provider"         — number belongs to a completely different practice or individual than listed
-- "retired"                — provider is retired, deceased, or no longer practicing at this location
-- "wrong_specialty"        — listed as behavioral health but practice confirmed a different specialty
-- "referral_only"          — practice requires a referral not disclosed in the directory, creating an access barrier
-
-Otherwise set ghost_reason to null.
-
-Write a concise 1-sentence summary describing what happened on the call.
-
-IMPORTANT: The transcript may contain speech-to-text errors (e.g. carrier name garbled as "eight now" instead of "Aetna"). Use context to interpret intent.
-
-Respond with ONLY valid JSON, no markdown fences:
-{{"status": "...", "ghost_reason": "...", "summary": "..."}}"""
+    ghost_reason = data.get("ghost_reason") or None
+    summary = data.get("summary") or "LLM classification produced no summary."
+    logger.info("ADK classifier → status=%s ghost_reason=%s", status, ghost_reason)
+    return status, ghost_reason, summary  # type: ignore[return-value]
 
 
-def _llm_classify(
+async def ac_classify_transcript(
     transcript: str,
-    carrier_hint: str,
-    gcp_project: str | None,
+    *,
+    carrier_hint: str = "Aetna",
+    gcp_project: str | None = None,
     vertex_location: str = "us-central1",
 ) -> tuple[Status, str | None, str]:
-    """Call Gemini Flash to classify the transcript. Falls back to no_answer on any error."""
-    if not gcp_project or not transcript.strip():
-        return "no_answer", None, "Could not classify transcript (no GCP project or empty transcript)."
+    """
+    Classify a call transcript using keyword rules, then the ADK classifier LlmAgent on Vertex.
 
+    Ensures ADK/Vertex env vars are present via setdefault (idempotent; safe with lifespan defaults).
+    """
+    if not (transcript or "").strip():
+        return "no_answer", None, "Could not classify transcript (empty transcript)."
+
+    t = transcript.lower()
+    keyword_result = _keyword_classify(t, carrier_hint)
+    if keyword_result is not None:
+        return keyword_result
+
+    proj = gcp_project or os.environ.get("GOOGLE_CLOUD_PROJECT")
+    if not proj:
+        return "no_answer", None, "Could not classify transcript (no GCP project)."
+
+    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", proj)
+    os.environ.setdefault("GOOGLE_CLOUD_LOCATION", vertex_location)
+    os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "true")
+
+    message = json.dumps({"transcript": transcript, "carrier": carrier_hint})
     try:
-        from google import genai  # type: ignore[import-untyped]
-
-        client = genai.Client(vertexai=True, project=gcp_project, location=vertex_location)
-        prompt = _CLASSIFICATION_PROMPT.format(
-            carrier=carrier_hint,
-            transcript=transcript,
-        )
-        resp = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-        )
-        raw = (resp.text or "").strip()
-        # Strip markdown fences if model adds them
-        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.MULTILINE).strip()
-        data = json.loads(raw)
-
-        status = data.get("status", "no_answer")
-        if status not in ("real", "ghost", "voicemail", "no_answer", "error"):
-            status = "no_answer"
-
-        ghost_reason = data.get("ghost_reason") or None
-        summary = data.get("summary") or "LLM classification produced no summary."
-        logger.info("LLM classifier → status=%s ghost_reason=%s", status, ghost_reason)
-        return status, ghost_reason, summary  # type: ignore[return-value]
-
+        raw = await run_agent_async(build_classifier_agent(), message)
+        return _parse_llm_classifier_json(raw)
     except Exception as exc:
-        logger.warning("LLM classifier failed (%s), falling back to no_answer", exc)
+        logger.warning("ADK classifier failed (%s), falling back to no_answer", exc)
         return "no_answer", None, "Could not classify transcript."
 
-
-# ---------------------------------------------------------------------------
-# Public entry point
-# ---------------------------------------------------------------------------
 
 def classify_transcript(
     transcript: str,
@@ -120,15 +95,22 @@ def classify_transcript(
     vertex_location: str = "us-central1",
 ) -> tuple[Status, str | None, str]:
     """
-    Hybrid classifier:
-      1. Keyword fast-path for high-confidence signals (voicemail, disconnected).
-      2. Gemini Flash LLM for everything else.
-      3. Falls back to no_answer if LLM is unavailable.
+    Sync entrypoint for tests and one-off scripts.
+
+    Do not call from an async FastAPI handler or inside any running event loop — use
+    :func:`ac_classify_transcript` instead.
     """
-    t = (transcript or "").lower()
-
-    keyword_result = _keyword_classify(t, carrier_hint)
-    if keyword_result is not None:
-        return keyword_result
-
-    return _llm_classify(transcript, carrier_hint, gcp_project, vertex_location)
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(
+            ac_classify_transcript(
+                transcript,
+                carrier_hint=carrier_hint,
+                gcp_project=gcp_project,
+                vertex_location=vertex_location,
+            )
+        )
+    raise RuntimeError(
+        "classify_transcript() cannot be used inside a running event loop; use await ac_classify_transcript()"
+    )

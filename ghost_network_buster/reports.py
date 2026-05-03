@@ -238,9 +238,11 @@ def build_complaint_draft_docx(
     zip_code = state.zip_code
     verification_id = hashlib.sha256(state.audit_id.encode()).hexdigest()[:12].upper()
 
-    # Synthesize RAG chunks into clean regulatory prose (one LLM call, shared across all sections)
+    # Synthesize RAG chunks (prefer ADK graph output when present)
     rag_synthesis = ""
-    if gcp_project and rag_hits:
+    if (state.adk_regulatory_bullets or "").strip():
+        rag_synthesis = state.adk_regulatory_bullets.strip()
+    elif gcp_project and rag_hits:
         from ghost_network_buster.agents.complaint_agent import synthesize_rag_hits  # noqa: PLC0415
         rag_synthesis = synthesize_rag_hits(
             rag_hits, carrier, zip_code, summary.ghost_rate, gcp_project, vertex_location
@@ -419,7 +421,7 @@ def build_complaint_draft_docx(
     doc.add_heading("Table of Verified Failures", level=3)
     _failures_table(doc, ghosts, summary.ghost_rate)
 
-    if rag_hits:
+    if rag_hits or rag_synthesis:
         doc.add_paragraph()
         doc.add_heading("Regulatory Basis", level=3)
         if rag_synthesis:
@@ -485,15 +487,16 @@ def build_complaint_draft_docx(
     ).bold = True
     doc.add_paragraph()
 
-    if gcp_project:
+    llm_narrative = ""
+    if (state.adk_letter_body or "").strip():
+        llm_narrative = state.adk_letter_body.strip()
+    elif gcp_project:
         from ghost_network_buster.agents import complaint_agent  # noqa: PLC0415
         llm_narrative = complaint_agent.generate_complaint_narrative(
             carrier, zip_code, summary.ghost_rate,
             [dict(h) for h in (rag_hits or [])],
             gcp_project, vertex_location,
         )
-    else:
-        llm_narrative = ""
 
     ag_template = (
         f"I am submitting this statement to report a systemic ghost network pattern in "
@@ -521,7 +524,7 @@ def build_complaint_draft_docx(
     doc.add_heading("Table of Verified Failures", level=3)
     _failures_table(doc, ghosts, summary.ghost_rate)
 
-    if rag_hits:
+    if rag_hits or rag_synthesis:
         doc.add_paragraph()
         doc.add_heading("Regulatory Basis", level=3)
         if rag_synthesis:

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -42,6 +43,15 @@ class AuditState(BaseModel):
     care_needs: list[str] = Field(default_factory=list)
     email: str | None = None
     loop_agent_note: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    plan_type: str | None = None
+    member_plan_label: str | None = None
+    recording_consent: bool = False
+    terms_acknowledged: bool = False
+    # Populated by ADK audit graph (RAG + synthesizer LlmAgents) for complaint alignment
+    adk_regulatory_bullets: str | None = None
+    adk_letter_body: str | None = None
 
 
 class AuditSummary(BaseModel):
@@ -52,6 +62,12 @@ class AuditSummary(BaseModel):
     carrier: str
     zip_code: str
     care_needs: list[str]
+    plan_type: str | None = None
+    member_plan_label: str | None = None
+    recording_consent: bool = False
+    terms_acknowledged: bool = False
+    started_at: str | None = None
+    completed_at: str | None = None
     providers_total: int
     calls_completed: int
     ghost_count: int
@@ -60,9 +76,11 @@ class AuditSummary(BaseModel):
     other_count: int
     ghost_rate: float
     voicemail_rate: float
+    high_ghost_rate: bool
     complaint_eligible: bool
     top_providers: list[CallResult]
     results: list[CallResult]
+    error: str | None = None
     share_path: str
     voice_mode: str
     loop_agent_note: str | None = None

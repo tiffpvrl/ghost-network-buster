@@ -1,48 +1,20 @@
 """
-Google ADK agent tree for Ghost Network Buster.
+Google ADK helpers for Ghost Network Buster.
 
-The three reasoning nodes (classifier, RAG, synthesizer) are real LlmAgent
-instances backed by Gemini Flash.  Directory loading and parallel calling are
-still StageMarkerAgent placeholders — those responsibilities live in the
-FastAPI pipeline and will be handed off in Option 3.
-
-run_agent_async() provides a reusable ADK Runner helper so individual agents
-can be invoked from API endpoints without spinning up the full pipeline.
+- build_classifier_agent / build_complaint_rag_agent / build_synthesizer_agent:
+  LlmAgent nodes used by the classifier module and the ADK audit graph.
+- build_audit_agent_blueprint(): static agent tree for GET /api/agents/graph (uses an
+  introspection-only execution context; run production audits via run_audit_with_adk).
+- run_agent_async(): single-message Runner helper (Vertex from process env / lifespan).
 """
 
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from google.adk.agents.base_agent import BaseAgent
-from google.adk.agents.invocation_context import InvocationContext
 from google.adk.agents.llm_agent import LlmAgent
-from google.adk.agents.parallel_agent import ParallelAgent
-from google.adk.agents.sequential_agent import SequentialAgent
-from google.adk.events.event import Event
 from google.genai import types
-from pydantic import Field
-from typing_extensions import override
-
-
-# ---------------------------------------------------------------------------
-# Infrastructure placeholder (no LLM needed)
-# ---------------------------------------------------------------------------
-
-class StageMarkerAgent(BaseAgent):
-    """Non-LLM agent that emits a single marker event (documents a pipeline stage)."""
-
-    marker_text: str = Field(default="")
-
-    @override
-    async def _run_async_impl(self, ctx: InvocationContext) -> AsyncGenerator[Event, None]:
-        yield Event(
-            author=self.name,
-            content=types.Content(
-                role="model",
-                parts=[types.Part(text=self.marker_text or f"{self.name} stage")],
-            ),
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +40,7 @@ inaccessible (see ghost_reason)
 - "voicemail" — reached voicemail or answering machine; no human confirmed \
 anything
 - "no_answer" — call unanswered, or transcript too short/unclear to determine \
-outcome
+outcome, or call answered but no human confirmed anything.
 
 If status is "ghost", set ghost_reason to EXACTLY one of — read the \
 definitions carefully before choosing:
@@ -87,9 +59,12 @@ mental health care (e.g. "we're a cardiology office", "we don't do therapy").
   "not_accepting_patients" — the practice accepts the carrier for behavioral \
 health but is currently CLOSED TO NEW PATIENTS.
   "wrong_provider"         — the number belongs to a completely different \
-practice or person than listed in the directory.
-  "retired"                — the provider is retired, deceased, or no longer \
-practicing at this location.
+practice or person than listed in the directory. This includes cases where the \
+  provider is still practicing but is no longer at this location.
+  "retired"                — the provider has stopped practicing in general \
+    (i.e. is retired, deceased, has closed their practice, or is no longer \
+      licensed). This is different from when a provider is still practicing \
+        but is no longer at this location.
   "wrong_specialty"        — listed as behavioral health but the practice \
 confirmed they are a different specialty entirely.
   "referral_only"          — the practice requires a referral not disclosed in \
@@ -176,52 +151,56 @@ attorney if you have questions about your legal rights."""
 # Blueprint builder
 # ---------------------------------------------------------------------------
 
-def build_audit_agent_blueprint() -> BaseAgent:
-    """Sequential workflow: directory → parallel voice slots → classify → RAG → synthesize."""
-    directory = StageMarkerAgent(
-        name="directory_agent",
-        description="Load and deduplicate insurer directory rows (JSON / future MRF ingest).",
-        marker_text="Directory loaded and deduplicated.",
-    )
-    fanout = ParallelAgent(
-        name="parallel_caller_agent",
-        description="Fan out Twilio/Pipecat voice verification calls (bounded concurrency).",
-        sub_agents=[
-            StageMarkerAgent(
-                name="caller_worker_a",
-                description="Outbound call worker slot.",
-                marker_text="Caller worker ready (actual calls run in FastAPI pipeline).",
-            ),
-            StageMarkerAgent(
-                name="caller_worker_b",
-                description="Outbound call worker slot.",
-                marker_text="Caller worker ready (actual calls run in FastAPI pipeline).",
-            ),
-        ],
-    )
-    classifier = LlmAgent(
+def build_classifier_agent(*, model: str | None = None) -> LlmAgent:
+    """Single-node ADK classifier (shared with ac_classify_transcript)."""
+    if model is None:
+        from ghost_network_buster.config import get_settings  # noqa: PLC0415
+
+        model = get_settings().vertex_pipecat_llm_model
+    return LlmAgent(
         name="classifier_agent",
-        model="gemini-2.0-flash",
+        model=model,
         description="Map transcript + telephony outcome to ghost/real/voicemail classification.",
         instruction=_CLASSIFIER_INSTRUCTION,
     )
-    rag = LlmAgent(
+
+
+def build_complaint_rag_agent(*, model: str | None = None) -> LlmAgent:
+    """Regulatory bullet synthesis (ADK LlmAgent; same instruction as legacy path)."""
+    if model is None:
+        from ghost_network_buster.config import get_settings  # noqa: PLC0415
+
+        model = get_settings().vertex_pipecat_llm_model
+    return LlmAgent(
         name="complaint_rag_agent",
-        model="gemini-2.0-flash",
+        model=model,
         description="Synthesize statutory / regulatory snippets into complaint bullet points.",
         instruction=_RAG_INSTRUCTION,
     )
-    synthesizer = LlmAgent(
+
+
+def build_synthesizer_agent(*, model: str | None = None) -> LlmAgent:
+    """Complaint letter body draft (ADK LlmAgent)."""
+    if model is None:
+        from ghost_network_buster.config import get_settings  # noqa: PLC0415
+
+        model = get_settings().vertex_pipecat_llm_model
+    return LlmAgent(
         name="synthesizer_agent",
-        model="gemini-2.0-flash",
+        model=model,
         description="Draft the Statement of Fact body for a regulatory complaint letter.",
         instruction=_SYNTHESIZER_INSTRUCTION,
     )
-    return SequentialAgent(
-        name="ghost_network_buster_root",
-        description="Root orchestrator for directory accuracy audits.",
-        sub_agents=[directory, fanout, classifier, rag, synthesizer],
+
+
+def build_audit_agent_blueprint() -> BaseAgent:
+    """Serializable tree for GET /api/agents/graph (introspection context — not for live audits)."""
+    from ghost_network_buster.pipeline.adk_audit import (  # noqa: PLC0415
+        build_audit_root_agent,
+        introspection_execution_context,
     )
+
+    return build_audit_root_agent(introspection_execution_context())
 
 
 # ---------------------------------------------------------------------------
@@ -233,25 +212,16 @@ async def run_agent_async(
     message: str,
     *,
     app_name: str = "ghost_network_buster",
-    project: str | None = None,
-    location: str = "us-central1",
 ) -> str:
     """
     Run a single ADK agent with one user message and return the final text response.
 
-    Pass project + location to route through Vertex AI. ADK requires the env var
-    GOOGLE_GENAI_USE_VERTEXAI=true to prefer Vertex over the Gemini API key path.
+    Vertex routing must come from the process environment (set in FastAPI lifespan
+    via Settings, or export vars for tests/CLI). Do not mutate os.environ here — it
+    is unsafe under concurrent requests.
     """
-    import os
-
     from google.adk.runners import Runner
     from google.adk.sessions.in_memory_session_service import InMemorySessionService
-
-    # Tell ADK to use Vertex AI (not the public Gemini API key path).
-    if project:
-        os.environ["GOOGLE_CLOUD_PROJECT"] = project
-        os.environ["GOOGLE_CLOUD_LOCATION"] = location
-    os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "true"
 
     session_service = InMemorySessionService()
     runner = Runner(agent=agent, app_name=app_name, session_service=session_service)

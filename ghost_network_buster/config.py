@@ -1,13 +1,18 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Load `.env` from repo root so settings work regardless of process working directory.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_ENV_FILE = _REPO_ROOT / ".env"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -28,6 +33,8 @@ class Settings(BaseSettings):
 
     # Vertex AI (used for Gemini LLM — complaint draft + Pipecat pipeline)
     vertex_location: str = "us-central1"   # Vertex AI region
+    # Live Pipecat turn uses streaming TTS; model id must exist in vertex_location for your project.
+    vertex_pipecat_llm_model: str = "gemini-2.5-flash"
 
     # Pipecat / open-source voice (used when VOICE_PROVIDER=pipecat)
     public_url: str | None = None          # ngrok or Cloud Run URL, no trailing slash
@@ -38,14 +45,29 @@ class Settings(BaseSettings):
     deepgram_stt_model: str = "nova-3-general"
     deepgram_stt_language: str = "en-US"
     deepgram_stt_sample_rate: int = Field(default=8000, ge=8000, le=48000)
-    deepgram_stt_utterance_end_ms: int = Field(default=600, ge=100, le=5000)
+    deepgram_stt_utterance_end_ms: int = Field(default=1200, ge=100, le=5000)
     deepgram_stt_smart_format: bool = True
     deepgram_stt_interim_results: bool = True
     # Endpointing: Deepgram accepts ms (e.g. 300) or boolean; 0 = omit (API default)
-    deepgram_stt_endpointing_ms: int = Field(default=300, ge=0, le=10000)
+    deepgram_stt_endpointing_ms: int = Field(default=550, ge=0, le=10000)
     # Deepgram TTS (Twilio output is resampled to 8 kHz µ-law in the serializer)
     deepgram_tts_voice: str = "aura-2-helena-en"
     deepgram_tts_sample_rate: int = Field(default=24000, ge=8000, le=48000)
+    # sentence = fewer, larger TTS chunks (smoother on phones); token = lowest latency between chunks
+    deepgram_tts_text_aggregation: Literal["sentence", "token"] = "sentence"
+
+    # After VAD stop, if Deepgram never emits a final (common on very short utterances), promote the
+    # last interim transcript to a synthetic TranscriptionFrame after this delay.
+    voice_stt_interim_commit_enabled: bool = True
+    voice_stt_interim_commit_delay_ms: int = Field(default=750, ge=0, le=3000)
+    voice_stt_interim_commit_min_chars: int = Field(default=2, ge=1, le=32)
+    # Log raw Deepgram interim + final lines to server stdout (dev / QA). May contain PHI — off in prod.
+    voice_stt_trace_enabled: bool = False
+    # Silero VAD (Pipecat): short stop_secs causes many user-stopped events mid-phrase on phone audio,
+    # which fragments Deepgram utterances. Tune for Twilio 8 kHz if you see VAD spam but no STT.
+    voice_vad_stop_secs: float = Field(default=0.85, ge=0.15, le=2.0)
+    voice_vad_start_secs: float = Field(default=0.2, ge=0.05, le=1.0)
+
     # Cost guard: pipecat audits with more providers than this are rejected unless
     # the request includes "override_cost_guard": true. Set to 0 to disable.
     pipecat_cost_guard: int = Field(default=5, ge=0)
@@ -60,6 +82,20 @@ class Settings(BaseSettings):
 
     # Provider directory JSON (relative to repo root unless absolute)
     providers_data_file: str = "data/providers_sample.json"
+
+    # Ghost rate at or above this value sets summary.high_ghost_rate (UI banners).
+    high_ghost_rate_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+
+    # When > 0, summaries and downloads reject audits older than this many hours (410).
+    share_max_age_hours: int = Field(default=0, ge=0)
+
+    # When True, POST /api/start-audit runs the Google ADK root agent (directory → voice →
+    # classify → RAG → synthesizer). When False, uses the legacy asyncio pipeline only.
+    use_adk_audit: bool = False
+
+    # If True and VOICE_PROVIDER=pipecat, the ADK graph re-runs ac_classify_transcript on each
+    # result after calls (extra Vertex cost). Default False: trust inline Pipecat classification.
+    adk_reclassify_after_pipecat: bool = False
 
 
 @lru_cache
