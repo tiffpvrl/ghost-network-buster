@@ -40,7 +40,7 @@ inaccessible (see ghost_reason)
 - "voicemail" — reached voicemail or answering machine; no human confirmed \
 anything
 - "no_answer" — call unanswered, or transcript too short/unclear to determine \
-outcome
+outcome, or call answered but no human confirmed anything.
 
 If status is "ghost", set ghost_reason to EXACTLY one of — read the \
 definitions carefully before choosing:
