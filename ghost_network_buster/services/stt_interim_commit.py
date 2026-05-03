@@ -51,6 +51,7 @@ class SttInterimCommitProcessor(FrameProcessor):
         self._enabled = enabled
 
         self._latest_interim: str = ""
+        self._best_interim: str = ""
         self._last_user_id: str = ""
         self._last_language: Language | None = None
         self._dedupe_norm: str | None = None
@@ -105,6 +106,9 @@ class SttInterimCommitProcessor(FrameProcessor):
 
         if isinstance(frame, InterimTranscriptionFrame):
             self._latest_interim = frame.text or ""
+            cand = self._latest_interim.strip()
+            if len(cand) > len(self._best_interim):
+                self._best_interim = cand
             self._last_user_id = frame.user_id or ""
             self._last_language = frame.language
             await self.push_frame(frame, direction)
@@ -123,6 +127,7 @@ class SttInterimCommitProcessor(FrameProcessor):
 
         if isinstance(frame, VADUserStartedSpeakingFrame):
             await self._cancel_pending()
+            self._best_interim = ""
             await self.push_frame(frame, direction)
             return
 
@@ -130,7 +135,7 @@ class SttInterimCommitProcessor(FrameProcessor):
             await self.push_frame(frame, direction)
             if self._enabled and self._commit_delay_ms >= 0:
                 await self._cancel_pending()
-                snap = (self._latest_interim or "").strip()
+                snap = (self._best_interim or self._latest_interim or "").strip()
                 if len(snap) >= self._min_chars:
                     uid = self._last_user_id
                     lang = self._last_language

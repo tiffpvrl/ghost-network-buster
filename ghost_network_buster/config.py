@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     voice_stt_interim_commit_enabled: bool = True
     voice_stt_interim_commit_delay_ms: int = Field(default=450, ge=0, le=3000)
     voice_stt_interim_commit_min_chars: int = Field(default=2, ge=1, le=32)
+    # Log raw Deepgram interim + final lines to server stdout (dev / QA). May contain PHI — off in prod.
+    voice_stt_trace_enabled: bool = False
+
     # Cost guard: pipecat audits with more providers than this are rejected unless
     # the request includes "override_cost_guard": true. Set to 0 to disable.
     pipecat_cost_guard: int = Field(default=5, ge=0)

@@ -650,6 +650,30 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
 
         transcript_lines: list[str] = []
 
+        class _SttTraceLogger(FrameProcessor):
+            """When enabled, INFO-log raw Deepgram interims and finals (before interim-commit / dedupe)."""
+
+            def __init__(self, enabled: bool, *, call_label: str) -> None:
+                super().__init__()
+                self._enabled = enabled
+                self._call_label = call_label
+                self._last_interim_logged: str = ""
+
+            async def process_frame(self, frame, direction: FrameDirection) -> None:  # type: ignore[override]
+                await super().process_frame(frame, direction)
+                if self._enabled:
+                    if isinstance(frame, InterimTranscriptionFrame):
+                        t = (frame.text or "").strip()
+                        if t and t != self._last_interim_logged:
+                            self._last_interim_logged = t
+                            logger.info("[%s] STT interim %r", self._call_label, t[:800])
+                    elif isinstance(frame, TranscriptionFrame):
+                        t = (frame.text or "").strip()
+                        self._last_interim_logged = ""
+                        if t:
+                            logger.info("[%s] STT final %r", self._call_label, t[:800])
+                await self.push_frame(frame, direction)
+
         class TranscriptCapture(FrameProcessor):
             """Logs agent + provider lines for audits.
 
@@ -700,6 +724,8 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
             f"do NOT say you are calling on behalf of a new patient again unless they ask who is calling. "
             f"Your goal is to verify whether the practice accepts {carrier_hint} for behavioral health "
             "and is accepting new patients. "
+            "If they clearly say they do NOT accept new patients or are not accepting, trust that answer, "
+            "thank them briefly, say goodbye, and do NOT ask the same question again. "
             "Reply in at most two short sentences. Stay on topic; do not invent appointments, doctors, or addresses. "
             "When the provider answers your question, acknowledge briefly (e.g. yes/no/clarifying question), "
             "then if you have a clear answer say 'Thank you so much, have a great day!' and stop. "
@@ -722,6 +748,92 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                 self._history: list = []
                 self._bot_speaking: bool = False
                 self._llm_in_progress: bool = False
+                # Latest transcription wins if multiple arrive while Gemini is still streaming (common
+                # when STT sends a short partial first and the full sentence moments later).
+                self._pending_stt_frame: TranscriptionFrame | None = None
+
+            async def _consume_user_transcription(
+                self, frame: TranscriptionFrame, direction: FrameDirection
+            ) -> None:
+                self._llm_in_progress = True
+                try:
+                    raw = frame.text.strip()
+                    await self.push_frame(frame, direction)
+                    if _looks_like_ivr_or_menu_stt(raw) or _short_digit_menu_noise(raw):
+                        logger.info(
+                            "Pipecat: IVR/menu-like STT (%d chars), canned clarification — %r",
+                            len(raw),
+                            raw[:160],
+                        )
+                        canned = (
+                            f"Sorry, I didn't catch that clearly — does your practice accept "
+                            f"{carrier_hint} for behavioral health, and are you taking new patients?"
+                        )
+                        await self.push_frame(LLMFullResponseStartFrame())
+                        await self.push_frame(LLMTextFrame(text=canned))
+                        await self.push_frame(LLMFullResponseEndFrame())
+                        return
+                    self._history.append({"role": "user", "parts": [{"text": raw}]})
+                    await self.push_frame(LLMFullResponseStartFrame())
+                    model_id = settings.vertex_pipecat_llm_model
+                    reply = ""
+                    prev_stream_text = ""
+                    try:
+                        stream = await self._client.aio.models.generate_content_stream(
+                            model=model_id,
+                            contents=self._history,
+                            config={"system_instruction": system_prompt},
+                        )
+                        async for chunk in stream:
+                            full = chunk.text or ""
+                            if not full:
+                                continue
+                            if full.startswith(prev_stream_text):
+                                delta = full[len(prev_stream_text) :]
+                            else:
+                                delta = full
+                                full = prev_stream_text + full
+                            prev_stream_text = full
+                            if delta:
+                                reply += delta
+                                await self.push_frame(LLMTextFrame(text=delta))
+                    except Exception as exc:
+                        logger.warning(
+                            "Pipecat: streaming LLM failed (%s), falling back to non-streaming",
+                            exc,
+                        )
+                        resp = await self._client.aio.models.generate_content(
+                            model=model_id,
+                            contents=self._history,
+                            config={"system_instruction": system_prompt},
+                        )
+                        reply = (resp.text or "").strip()
+                        if reply:
+                            await self.push_frame(LLMTextFrame(text=reply))
+                    reply = reply.strip()
+                    if not reply:
+                        logger.warning(
+                            "Pipecat: Gemini returned empty reply; using fallback (user STT %r)",
+                            raw[:120],
+                        )
+                        reply = (
+                            f"I didn't quite hear that — do you accept {carrier_hint} "
+                            "for behavioral health and are you accepting new patients?"
+                        )
+                        await self.push_frame(LLMTextFrame(text=reply))
+                    self._history.append({"role": "model", "parts": [{"text": reply}]})
+                    await self.push_frame(LLMFullResponseEndFrame())
+                    farewell_phrases = ("have a great day", "goodbye", "take care", "bye")
+                    has_farewell = any(p in reply.lower() for p in farewell_phrases)
+                    # Don't hang up if Gemini is still asking a question in the same reply.
+                    if reply and has_farewell and "?" not in reply:
+                        await self.push_frame(EndFrame())
+                finally:
+                    self._llm_in_progress = False
+                nxt = self._pending_stt_frame
+                self._pending_stt_frame = None
+                if nxt is not None and nxt.text.strip():
+                    await self._consume_user_transcription(nxt, direction)
 
             async def process_frame(self, frame, direction: FrameDirection):  # type: ignore[override]
                 await super().process_frame(frame, direction)
@@ -746,86 +858,15 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                     # Bug 1: drop STT frames while the bot's own TTS is playing.
                     if self._bot_speaking:
                         return
-                    # Bug 2: set the in-progress flag synchronously before any await so
-                    # concurrent frames that arrive while we yield cannot slip through.
-                    # (asyncio.Lock.locked() check + async-with had a TOCTOU window.)
                     if self._llm_in_progress:
+                        self._pending_stt_frame = frame
+                        logger.info(
+                            "Pipecat: deferred STT while LLM busy (latest wins): %r",
+                            frame.text.strip()[:220],
+                        )
                         return
-                    self._llm_in_progress = True  # no await between check and set — atomic
-                    try:
-                        raw = frame.text.strip()
-                        await self.push_frame(frame, direction)
-                        if _looks_like_ivr_or_menu_stt(raw) or _short_digit_menu_noise(raw):
-                            logger.info(
-                                "Pipecat: IVR/menu-like STT (%d chars), canned clarification — %r",
-                                len(raw),
-                                raw[:160],
-                            )
-                            canned = (
-                                f"Sorry, I didn't catch that clearly — does your practice accept "
-                                f"{carrier_hint} for behavioral health, and are you taking new patients?"
-                            )
-                            await self.push_frame(LLMFullResponseStartFrame())
-                            await self.push_frame(LLMTextFrame(text=canned))
-                            await self.push_frame(LLMFullResponseEndFrame())
-                            return
-                        self._history.append({"role": "user", "parts": [{"text": raw}]})
-                        await self.push_frame(LLMFullResponseStartFrame())
-                        model_id = settings.vertex_pipecat_llm_model
-                        reply = ""
-                        prev_stream_text = ""
-                        try:
-                            stream = await self._client.aio.models.generate_content_stream(
-                                model=model_id,
-                                contents=self._history,
-                                config={"system_instruction": system_prompt},
-                            )
-                            async for chunk in stream:
-                                full = chunk.text or ""
-                                if not full:
-                                    continue
-                                if full.startswith(prev_stream_text):
-                                    delta = full[len(prev_stream_text) :]
-                                else:
-                                    delta = full
-                                    full = prev_stream_text + full
-                                prev_stream_text = full
-                                if delta:
-                                    reply += delta
-                                    await self.push_frame(LLMTextFrame(text=delta))
-                        except Exception as exc:
-                            logger.warning(
-                                "Pipecat: streaming LLM failed (%s), falling back to non-streaming",
-                                exc,
-                            )
-                            resp = await self._client.aio.models.generate_content(
-                                model=model_id,
-                                contents=self._history,
-                                config={"system_instruction": system_prompt},
-                            )
-                            reply = (resp.text or "").strip()
-                            if reply:
-                                await self.push_frame(LLMTextFrame(text=reply))
-                        reply = reply.strip()
-                        if not reply:
-                            logger.warning(
-                                "Pipecat: Gemini returned empty reply; using fallback (user STT %r)",
-                                raw[:120],
-                            )
-                            reply = (
-                                f"I didn't quite hear that — do you accept {carrier_hint} "
-                                "for behavioral health and are you accepting new patients?"
-                            )
-                            await self.push_frame(LLMTextFrame(text=reply))
-                        self._history.append({"role": "model", "parts": [{"text": reply}]})
-                        await self.push_frame(LLMFullResponseEndFrame())
-                        farewell_phrases = ("have a great day", "goodbye", "take care", "bye")
-                        has_farewell = any(p in reply.lower() for p in farewell_phrases)
-                        # Don't hang up if Gemini is still asking a question in the same reply.
-                        if reply and has_farewell and "?" not in reply:
-                            await self.push_frame(EndFrame())
-                    finally:
-                        self._llm_in_progress = False
+                    await self._consume_user_transcription(frame, direction)
+                    return
                 else:
                     await self.push_frame(frame, direction)
 
@@ -859,6 +900,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                 endpointing=endpointing_opt,
             ),
         )
+        stt_trace = _SttTraceLogger(settings.voice_stt_trace_enabled, call_label=call_id)
         stt_commit = SttInterimCommitProcessor(
             commit_delay_ms=settings.voice_stt_interim_commit_delay_ms,
             min_chars=settings.voice_stt_interim_commit_min_chars,
@@ -886,6 +928,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                 "tts_voice": settings.deepgram_tts_voice,
                 "tts_sample_rate": settings.deepgram_tts_sample_rate,
                 "tts_text_aggregation": settings.deepgram_tts_text_aggregation,
+                "voice_stt_trace_enabled": settings.voice_stt_trace_enabled,
             },
             hypothesis_id="H_deepgram",
         )
@@ -927,6 +970,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                 transport.input(),
                 vad,
                 stt,
+                stt_trace,
                 stt_commit,
                 llm,
                 capture,
