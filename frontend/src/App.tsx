@@ -10,6 +10,8 @@ import Privacy from "./pages/Privacy";
 import Results from "./pages/Results";
 import Terms from "./pages/Terms";
 import AppLayout from "./pages/app/AppLayout";
+import EmployerAuditNew from "./pages/app/EmployerAuditNew";
+import EmployerBatchPage from "./pages/app/EmployerBatch";
 import EmployerHome from "./pages/app/EmployerHome";
 import PatientHome from "./pages/app/PatientHome";
 import Checkout from "./pages/auth/Checkout";
@@ -94,6 +96,10 @@ const APP_ROUTES = (
       <Route path="/app/patient/audits/:auditId" element={<Dashboard />} />
       <Route path="/app/patient/results/:auditId" element={<Results />} />
       <Route path="/app/employer" element={<EmployerHome />} />
+      <Route path="/app/employer/audits/new" element={<EmployerAuditNew />} />
+      <Route path="/app/employer/audits/:auditId" element={<Dashboard />} />
+      <Route path="/app/employer/results/:auditId" element={<Results />} />
+      <Route path="/app/employer/batches/:batchId" element={<EmployerBatchPage />} />
     </Route>
   </Route>
 );

@@ -44,17 +44,21 @@ export default function AppLayout() {
 
   const pathParts = location.pathname.split("/").filter(Boolean);
   const isAudit = pathParts.includes("audits") || pathParts.includes("results");
+  const isBatch = pathParts.includes("batches");
   const auditId = pathParts[pathParts.indexOf("audits") + 1] ?? pathParts[pathParts.indexOf("results") + 1];
+  const batchId = isBatch ? pathParts[pathParts.indexOf("batches") + 1] : undefined;
   const isResults = pathParts.includes("results");
 
   const breadcrumbs: { label: string; current?: boolean }[] = [
     { label: isPatient ? "Patient" : "Employer" },
+    ...(isBatch ? [{ label: "Batches" }] : []),
     ...(isAudit ? [{ label: "Audits" }] : []),
     ...(isResults ? [{ label: "Results", current: true }] : []),
     ...(isAudit && !isResults && auditId && auditId !== "new"
       ? [{ label: auditId.slice(0, 8), current: true }]
       : []),
     ...(auditId === "new" ? [{ label: "New Audit", current: true }] : []),
+    ...(batchId ? [{ label: batchId.slice(0, 8), current: true }] : []),
   ];
 
   return (
@@ -83,12 +87,12 @@ export default function AppLayout() {
             {t("appWorkspacePatient") || "Overview"}
           </NavLink>
           <NavLink
-            to={isPatient ? "/app/patient/audits/new" : "/app/employer"}
-            className={() => `sidebar-nav-item${isAudit ? " active" : ""}`}
+            to={isPatient ? "/app/patient/audits/new" : "/app/employer/audits/new"}
+            className={() => `sidebar-nav-item${isAudit || isBatch ? " active" : ""}`}
           >
             <SideIcon><path d="M9 11l3 3 7-7"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></SideIcon>
             Audits
-            {!isAudit && <span className="sidebar-badge">new</span>}
+            {!isAudit && !isBatch && <span className="sidebar-badge">new</span>}
           </NavLink>
         </nav>
 
@@ -132,11 +136,6 @@ export default function AppLayout() {
           </div>
           <div className="topbar-actions-row">
             <TopbarSearch />
-            <NavLink to="/checkout" className="topbar-icon-btn" title={t("appBuyCredits")}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-              </svg>
-            </NavLink>
           </div>
         </div>
         <div className="beacon-page">

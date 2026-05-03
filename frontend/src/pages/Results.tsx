@@ -1,13 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import type { AuditSummary, CallResult } from "../api";
 import { ApiError, apiGet, downloadPdf } from "../api";
+import { useAuth } from "../auth/AuthProvider";
 import StatusLegend from "../components/StatusLegend";
 import { useDashboardFilter } from "../contexts/DashboardFilterContext";
 import { DEMO_AUDIT_ID, DEMO_SUMMARY } from "../demo-data";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useLocale } from "../locale";
 import { ghostReasonLabelLong } from "../labels";
+
+function redactName(name: string | null | undefined): string {
+  if (!name) return "•••••";
+  return name
+    .split(/\s+/)
+    .map((part) => {
+      if (!part) return "";
+      const head = part.charAt(0);
+      // Preserve credential-like tokens (LCSW, MD, PhD, PsyD, RN…) as-is
+      if (/^[A-Z]{2,}$/.test(part) || /^[A-Z][a-z]?D$/.test(part)) return part;
+      return `${head}${"•".repeat(Math.max(part.length - 1, 3))}`;
+    })
+    .join(" ")
+    .trim();
+}
 
 function formatVerifiedAt(iso?: string | null): string {
   if (!iso) return "—";
@@ -21,7 +37,12 @@ function formatVerifiedAt(iso?: string | null): string {
 export default function Results() {
   const { t } = useLocale();
   const { auditId } = useParams();
+  const location = useLocation();
+  const { isShortlistUnlocked, isComplaintUnlocked } = useAuth();
   const isDemo = auditId === DEMO_AUDIT_ID;
+  const isEmployerView = location.pathname.startsWith("/app/employer/");
+  const shortlistUnlocked = isEmployerView || (auditId ? isShortlistUnlocked(auditId) : false);
+  const complaintUnlocked = isEmployerView || (auditId ? isComplaintUnlocked(auditId) : false);
   const [summary, setSummary] = useState<AuditSummary | null>(isDemo ? DEMO_SUMMARY : null);
   const [loadErr, setLoadErr] = useState<{ status?: number; message: string } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -295,7 +316,7 @@ export default function Results() {
         <div className="alert-bar" style={{ marginBottom: "1.5rem" }}>
           <span className="alert-icon" aria-hidden />
           <span style={{ flex: 1 }}>{t("regulatoryAlert")}</span>
-          {summary.complaint_eligible ? (
+          {summary.complaint_eligible && complaintUnlocked ? (
             <button
               type="button"
               className="btn print-hidden"
@@ -307,6 +328,14 @@ export default function Results() {
             >
               {downloading === "complaint" ? t("complaintGenerating") : t("resultsComplaintDraft")}
             </button>
+          ) : summary.complaint_eligible ? (
+            <Link
+              to={`/checkout?plan=bundle&audit=${auditId}`}
+              className="btn print-hidden"
+              style={{ flexShrink: 0, fontSize: "0.72rem" }}
+            >
+              {t("paywallComplaintCta")}
+            </Link>
           ) : null}
         </div>
       )}
@@ -317,7 +346,7 @@ export default function Results() {
         <h2 style={{ marginBottom: "1rem" }}>{t("shortlistHeading")}</h2>
         {summary.top_providers.length === 0 ? (
           <p className="lede">{t("shortlistEmpty")}</p>
-        ) : (
+        ) : shortlistUnlocked ? (
           summary.top_providers.map((p: CallResult) => (
           <div key={p.npi} className="provider-card verified">
             <div className="verified-badge">
@@ -349,6 +378,33 @@ export default function Results() {
             {open === p.npi && <pre className="mono" style={{ marginTop: "0.65rem" }}>{p.transcript}</pre>}
           </div>
           ))
+        ) : (
+          <>
+            <p className="lede" style={{ marginBottom: "1rem" }}>
+              {t("paywallShortlistTeaser", { n: summary.top_providers.length })}
+            </p>
+            <div style={{ marginBottom: "1.25rem" }}>
+              {summary.top_providers.map((p: CallResult) => (
+                <div key={p.npi} className="provider-card verified locked-teaser" aria-hidden="true">
+                  <div className="verified-badge">
+                    {t("resultsUsableBadge", { when: formatVerifiedAt(p.verified_at) })}
+                  </div>
+                  <h3 style={{ filter: "blur(0.4px)" }}>{redactName(p.provider_name)}</h3>
+                  {p.specialty && (
+                    <div className="detail">● Specialty: {p.specialty}</div>
+                  )}
+                  <div className="detail highlight">
+                    ● Phone, transcript, and verification details unlock with $4.99.
+                  </div>
+                </div>
+              ))}
+            </div>
+            <PaywallCard
+              auditId={auditId}
+              t={t}
+              eligibleComplaint={summary.complaint_eligible}
+            />
+          </>
         )}
       </div>
 
@@ -375,15 +431,27 @@ export default function Results() {
           >
             {downloading === "csv" ? t("resultsDownloading") : t("downloadCsv")}
           </button>
-          <button
-            type="button"
-            className="btn secondary"
-            disabled={!summary.complaint_eligible || downloading === "complaint"}
-            title={summary.complaint_eligible ? "" : "Requires at least one ghost (failed) listing"}
-            onClick={() => void grab(`/api/download/complaint/${auditId}`, `gnb-complaint-${auditId!.slice(0, 8)}.docx`, "complaint")}
-          >
-            {downloading === "complaint" ? t("complaintGenerating") : t("downloadComplaint")}
-          </button>
+          {complaintUnlocked ? (
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={!summary.complaint_eligible || downloading === "complaint"}
+              title={summary.complaint_eligible ? "" : "Requires at least one ghost (failed) listing"}
+              onClick={() => void grab(`/api/download/complaint/${auditId}`, `gnb-complaint-${auditId!.slice(0, 8)}.docx`, "complaint")}
+            >
+              {downloading === "complaint" ? t("complaintGenerating") : t("downloadComplaint")}
+            </button>
+          ) : (
+            <Link
+              to={`/checkout?plan=bundle&audit=${auditId}`}
+              className="btn secondary"
+              aria-disabled={!summary.complaint_eligible}
+              style={summary.complaint_eligible ? undefined : { pointerEvents: "none", opacity: 0.55 }}
+              title={summary.complaint_eligible ? "" : "Requires at least one ghost (failed) listing"}
+            >
+              {t("paywallComplaintCta")}
+            </Link>
+          )}
         </div>
       </div>
       </div>
@@ -449,6 +517,51 @@ export default function Results() {
           {t("newAudit")}
         </Link>
       </div>
+    </div>
+  );
+}
+
+function PaywallCard({
+  auditId,
+  t,
+  eligibleComplaint,
+}: {
+  auditId: string | undefined;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+  eligibleComplaint: boolean;
+}) {
+  return (
+    <div className="paywall-card print-hidden" role="region" aria-labelledby="paywall-title">
+      <div className="paywall-card__head">
+        <span className="paywall-card__lock" aria-hidden>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="4" y="11" width="16" height="10" rx="2" />
+            <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+          </svg>
+        </span>
+        <h3 id="paywall-title" className="paywall-card__title">
+          {t("paywallTitle")}
+        </h3>
+      </div>
+      <p className="paywall-card__body">{t("paywallBody")}</p>
+      <div className="paywall-card__actions">
+        <Link
+          to={`/checkout?plan=unlock&audit=${auditId}`}
+          className="btn"
+        >
+          {t("paywallUnlockCta")}
+        </Link>
+        <Link
+          to={`/checkout?plan=bundle&audit=${auditId}`}
+          className="btn secondary"
+          aria-disabled={!eligibleComplaint}
+          style={eligibleComplaint ? undefined : { opacity: 0.6, pointerEvents: "none" }}
+          title={eligibleComplaint ? "" : "Requires at least one ghost (failed) listing"}
+        >
+          {t("paywallBundleCta")}
+        </Link>
+      </div>
+      <p className="paywall-card__fineprint">{t("paywallFinePrint")}</p>
     </div>
   );
 }

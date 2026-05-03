@@ -1870,19 +1870,44 @@ table.beacon-providers tbody td.num { text-align: right; font-feature-settings: 
 }
 
 .tier-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.tier-row__link {
   display: grid;
   grid-template-columns: minmax(120px, 0.6fr) minmax(120px, 0.6fr) minmax(0, 2fr);
   align-items: center;
   gap: 1rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
   padding: 1rem 1.15rem;
+  text-decoration: none;
+  color: inherit;
+  border-radius: inherit;
+}
+
+.tier-row:hover {
+  border-color: color-mix(in srgb, var(--primary) 50%, var(--border));
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface));
+}
+
+.tier-row:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.tier-row__link:focus-visible {
+  outline: none;
 }
 
 .tier-row--accent {
   border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
   background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.tier-row--accent:hover {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
 }
 
 .tier-row__name {
@@ -1922,9 +1947,197 @@ table.beacon-providers tbody td.num { text-align: right; font-feature-settings: 
 }
 
 @media (max-width: 700px) {
-  .tier-row {
+  .tier-row__link {
     grid-template-columns: 1fr;
     gap: 0.4rem;
+  }
+}
+
+/* ── Paywall card (results page) ─────────────────────────────── */
+.paywall-card {
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+  border-left-width: 4px;
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+  border-radius: 8px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.paywall-card__head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.paywall-card__lock {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.paywall-card__title {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+
+.paywall-card__body {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.paywall-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+}
+
+.paywall-card__fineprint {
+  margin: 0.2rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.locked-teaser {
+  opacity: 0.85;
+  position: relative;
+}
+
+.locked-teaser::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--surface) 70%, transparent) 100%);
+  border-radius: inherit;
+}
+
+/* ── Employer batch table & batch list ───────────────────────── */
+.batch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.batch-table th,
+.batch-table td {
+  text-align: left;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.batch-table th {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--text) 4%, var(--surface));
+  font-weight: 600;
+}
+
+.batch-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.batch-table a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.batch-table a:hover {
+  text-decoration: underline;
+}
+
+.batch-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.batch-list__row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.batch-list__row:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--primary) 3%, var(--surface));
+}
+
+.batch-list__link {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.batch-list__id {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.batch-list__meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.batch-list__when {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.tier-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.tier-badge--muted {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--muted);
+}
+
+@media (max-width: 700px) {
+  .batch-list__link {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
   }
 }
 

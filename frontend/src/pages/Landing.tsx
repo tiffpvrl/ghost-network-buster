@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, apiPost, apiProvidersPreview, type PlanType } from "../api";
-import { useAuth } from "../auth/AuthProvider";
 import { disclaimerRecording, disclaimerShort } from "../copy";
+import { PRESET_CARRIERS as CARRIER_LIST } from "../data/carriers";
 import { DEMO_AUDIT_ID } from "../demo-data";
 import { useLocale } from "../locale";
 
@@ -13,23 +13,7 @@ const CARE_OPTIONS = [
 ];
 
 /** NY-biased and common national carriers; "Other" triggers free-text. */
-const PRESET_CARRIERS: string[] = [
-  "Healthfirst",
-  "MetroPlus Health Plan",
-  "Fidelis Care (Centene)",
-  "EmblemHealth / ConnectiCare",
-  "Empire BCBS (NY)",
-  "Anthem / Elevance (check state)",
-  "UnitedHealthcare",
-  "Aetna",
-  "Cigna",
-  "Oscar",
-  "MVP Health Care",
-  "CDPHP",
-  "Highmark / BlueCross WNY",
-  "Centene / Wellcare (Medicare)",
-  "Other (type below)",
-];
+const PRESET_CARRIERS: string[] = [...CARRIER_LIST, "Other (type below)"];
 
 const PLAN_TYPES: { value: PlanType; label: string }[] = [
   { value: "commercial", label: "Commercial / employer plan" },
@@ -61,7 +45,6 @@ export default function Landing() {
   const { t } = useLocale();
   const nav = useNavigate();
   const [searchParams] = useSearchParams();
-  const { credits, consumeCredit } = useAuth();
   const [carrierPick, setCarrierPick] = useState(() =>
     PRESET_CARRIERS.includes("Aetna") ? "Aetna" : PRESET_CARRIERS[0] ?? "Aetna",
   );
@@ -90,12 +73,6 @@ export default function Landing() {
       nav(`/app/patient/audits/${DEMO_AUDIT_ID}`);
     }
   }, [searchParams, nav]);
-
-  // Credit gate: require ≥1 audit credit before showing the start-audit form.
-  // Demo audits are free, so allow ?demo=true to bypass.
-  if (credits < 1 && searchParams.get("demo") !== "true") {
-    return <Navigate to="/checkout?next=%2Fapp%2Fpatient%2Faudits%2Fnew" replace />;
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -167,7 +144,6 @@ export default function Landing() {
         recording_consent: consentRecord,
         terms_acknowledged: consentTerms,
       });
-      consumeCredit();
       await new Promise((r) => setTimeout(r, 500));
       nav(`/app/patient/audits/${audit_id}`);
     } catch (e) {

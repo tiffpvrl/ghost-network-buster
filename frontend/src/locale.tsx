@@ -257,6 +257,102 @@ const DICT: Record<Locale, Record<string, string>> = {
     employerWorkspaceTitle: "Employer workspace",
     employerWorkspaceBody:
       "All figures below are illustrative aggregates with no PHI and are not tied to live patient audits. Useful for renewal storytelling.",
+
+    cancel: "Cancel",
+
+    // ── Paywall (results page) ─────────────────────────────────
+    paywallTitle: "Unlock your shortlist",
+    paywallBody:
+      "Names, phone numbers, transcripts, and verification details are hidden until you unlock this audit. One-time charge — no subscription.",
+    paywallShortlistTeaser:
+      "We found {n} usable provider listings. Names, phone numbers, and transcripts are hidden until you unlock this audit.",
+    paywallUnlockCta: "Unlock shortlist — $4.99",
+    paywallBundleCta: "Unlock + complaint letter — $12.99",
+    paywallComplaintCta: "Unlock complaint letter — $12.99",
+    paywallFinePrint:
+      "Demo checkout in this build — no card is charged. Unlock state is stored locally in your browser.",
+
+    // ── Checkout plan registry ─────────────────────────────────
+    checkoutPlanUnlockTitle: "Unlock the full shortlist",
+    checkoutPlanUnlockWhat:
+      "See the full list of usable providers from this audit, including names, phone numbers, and call transcripts.",
+    checkoutPlanBundleTitle: "Full Report + Complaint Letter",
+    checkoutPlanBundleWhat:
+      "Everything in the shortlist unlock, plus a downloadable, statute-cited complaint draft you can take to your state insurance department.",
+    checkoutPlanTierStarterTitle: "Starter — Employer plan",
+    checkoutPlanTierStarterWhat:
+      "100–500 employees · 1 carrier audit / month · PDF compliance report.",
+    checkoutPlanTierGrowthTitle: "Growth — Employer plan",
+    checkoutPlanTierGrowthWhat:
+      "500–2,000 employees · 3 carriers · multi-ZIP · quarterly trend reports.",
+    checkoutPlanTierEnterpriseTitle: "Enterprise — Employer plan",
+    checkoutPlanTierEnterpriseWhat:
+      "2,000+ employees · unlimited carriers · API access · regulator-ready filing package. Custom pricing.",
+    checkoutPayLabel: "Pay {price} (demo)",
+    checkoutContactSales: "Contact sales →",
+    checkoutFallbackStarter: "Continue with Starter for now",
+
+    // ── Employer audit form / batch flow ───────────────────────
+    employerNewAuditEyebrow: "New employer audit",
+    employerNewAuditTitle: "Audit your network across carriers and ZIPs",
+    employerNewAuditLede:
+      "Pick the carriers and ZIPs you want to audit. We fan out one verification audit per (carrier × ZIP) pair and aggregate the results into a single batch view.",
+    employerTierBadge: "Active plan: {tier}",
+    employerTierLabel: "{tier} plan",
+    employerTierNone: "no plan selected",
+    employerChangePlan: "Change plan",
+    employerFormCarriersLabel: "Carriers to audit",
+    employerFormZipsLabel: "ZIP codes",
+    employerFormZipsHelp:
+      "Newline- or comma-separated. We accept 5-digit ZIPs and ZIP+4.",
+    employerFormInvalidZips: "Check these ZIPs: {list}",
+    employerFormNeedsLabel: "Care needs (applies to every audit)",
+    employerFormPlanTypeLabel: "Plan type",
+    employerFormConsentRecord:
+      "I confirm staff at sampled listings will receive automated verification calls in line with posted terms.",
+    employerFormConsentTerms:
+      "I acknowledge results describe what reception said on the call — not a guarantee of coverage.",
+    employerFormSummary:
+      "{carriers} carrier(s) × {zips} ZIP(s) = {total} audit(s).",
+    employerFormCapWarning:
+      "This batch would launch {total} audits, which exceeds the per-batch cap of {cap}. Reduce carriers or ZIPs.",
+    employerFormSubmit: "Run batch",
+    employerFormSubmitting: "Starting…",
+    employerFormSubmitError:
+      "Could not start any audits in this batch. Check your demo API key or server logs and try again.",
+
+    batchEyebrow: "Employer batch",
+    batchTitle: "Batch {id}",
+    batchLede:
+      "{carriers} carrier × {zips} ZIP = {total} audits. We poll each audit until completion.",
+    batchKpiAudits: "Audits done",
+    batchKpiGhostRate: "Ghost rate",
+    batchKpiReal: "Real / usable",
+    batchKpiCallsPlaced: "Calls placed",
+    batchColCarrier: "Carrier",
+    batchColZip: "ZIP",
+    batchColCalls: "Calls",
+    batchColGhost: "Ghost %",
+    batchColStatus: "Status",
+    batchRowLive: "Live →",
+    batchRowOpen: "Open →",
+    batchMissingTitle: "Batch not found",
+    batchMissingBody:
+      "This batch is not stored in your browser. If you ran it on another device, it will not appear here.",
+    batchBackToEmployer: "← Back to workspace",
+
+    employerHomeTitle: "Run an employer batch audit",
+    employerHomeBody:
+      "Audit one or more carriers across multiple ZIPs in a single batch. Results aggregate into compliance-ready KPIs.",
+    employerHomeRunNewAudit: "Run a new audit",
+    employerHomeSelectPlan: "Select a plan",
+    employerHomeRecentTitle: "Recent batches",
+    employerHomeRecentEmpty:
+      "You have not run any batch audits yet. Start one to see ghost rates by carrier and ZIP.",
+    employerHomeRecentMeta:
+      "{carriers} carrier × {zips} ZIP · {total} audits",
+    employerHomeReferenceTitle: "Reference data",
+    employerHomeReferenceTag: "Illustrative — not from your audits",
   },
 };
 

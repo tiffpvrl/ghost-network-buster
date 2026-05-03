@@ -72,27 +72,45 @@ export default function Pricing() {
 
         <ul className="tier-list" role="list">
           <li className="tier-row">
-            <div className="tier-row__name">{t("pricingTierStarterName")}</div>
-            <div className="tier-row__price">
-              <span className="tier-row__amount">{t("pricingTierStarterPrice")}</span>
-              <span className="tier-row__unit">{t("pricingTierMonthly")}</span>
-            </div>
-            <div className="tier-row__body"><IconCheck /><span>{t("pricingTierStarterBody")}</span></div>
+            <Link
+              to="/signup?role=employer&plan=tier-starter"
+              className="tier-row__link"
+              aria-label={`${t("pricingTierStarterName")} — ${t("pricingTierStarterPrice")}`}
+            >
+              <div className="tier-row__name">{t("pricingTierStarterName")}</div>
+              <div className="tier-row__price">
+                <span className="tier-row__amount">{t("pricingTierStarterPrice")}</span>
+                <span className="tier-row__unit">{t("pricingTierMonthly")}</span>
+              </div>
+              <div className="tier-row__body"><IconCheck /><span>{t("pricingTierStarterBody")}</span></div>
+            </Link>
           </li>
           <li className="tier-row tier-row--accent">
-            <div className="tier-row__name">{t("pricingTierGrowthName")}</div>
-            <div className="tier-row__price">
-              <span className="tier-row__amount">{t("pricingTierGrowthPrice")}</span>
-              <span className="tier-row__unit">{t("pricingTierMonthly")}</span>
-            </div>
-            <div className="tier-row__body"><IconCheck /><span>{t("pricingTierGrowthBody")}</span></div>
+            <Link
+              to="/signup?role=employer&plan=tier-growth"
+              className="tier-row__link"
+              aria-label={`${t("pricingTierGrowthName")} — ${t("pricingTierGrowthPrice")}`}
+            >
+              <div className="tier-row__name">{t("pricingTierGrowthName")}</div>
+              <div className="tier-row__price">
+                <span className="tier-row__amount">{t("pricingTierGrowthPrice")}</span>
+                <span className="tier-row__unit">{t("pricingTierMonthly")}</span>
+              </div>
+              <div className="tier-row__body"><IconCheck /><span>{t("pricingTierGrowthBody")}</span></div>
+            </Link>
           </li>
           <li className="tier-row">
-            <div className="tier-row__name">{t("pricingTierEnterpriseName")}</div>
-            <div className="tier-row__price">
-              <span className="tier-row__amount">{t("pricingTierEnterprisePrice")}</span>
-            </div>
-            <div className="tier-row__body"><IconCheck /><span>{t("pricingTierEnterpriseBody")}</span></div>
+            <Link
+              to="/signup?role=employer&plan=tier-enterprise"
+              className="tier-row__link"
+              aria-label={`${t("pricingTierEnterpriseName")} — ${t("pricingTierEnterprisePrice")}`}
+            >
+              <div className="tier-row__name">{t("pricingTierEnterpriseName")}</div>
+              <div className="tier-row__price">
+                <span className="tier-row__amount">{t("pricingTierEnterprisePrice")}</span>
+              </div>
+              <div className="tier-row__body"><IconCheck /><span>{t("pricingTierEnterpriseBody")}</span></div>
+            </Link>
           </li>
         </ul>
       </section>

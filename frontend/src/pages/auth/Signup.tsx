@@ -27,6 +27,11 @@ export default function Signup() {
       return;
     }
     const u = signup(trimmed, role);
+    const plan = params.get("plan");
+    if (plan) {
+      nav(`/checkout?plan=${encodeURIComponent(plan)}`, { replace: true });
+      return;
+    }
     nav(u.role === "employer" ? "/app/employer" : "/app/patient", { replace: true });
   }
 
