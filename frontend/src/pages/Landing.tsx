@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, apiPost, apiProvidersPreview, type PlanType } from "../api";
 import { disclaimerRecording, disclaimerShort } from "../copy";
 import { PRESET_CARRIERS as CARRIER_LIST } from "../data/carriers";
+import { recordPatientAudit } from "../data/patientAudits";
 import { DEMO_AUDIT_ID } from "../demo-data";
 import { useLocale } from "../locale";
 
@@ -144,6 +145,16 @@ export default function Landing() {
         recording_consent: consentRecord,
         terms_acknowledged: consentTerms,
       });
+      if (searchParams.get("demo") !== "true") {
+        recordPatientAudit({
+          id: audit_id,
+          carrier: resolvedCarrier,
+          zip: zip.trim(),
+          planType,
+          careNeeds: needs,
+          latestStatus: "running",
+        });
+      }
       await new Promise((r) => setTimeout(r, 500));
       nav(`/app/patient/audits/${audit_id}`);
     } catch (e) {

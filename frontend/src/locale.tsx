@@ -353,6 +353,28 @@ const DICT: Record<Locale, Record<string, string>> = {
       "{carriers} carrier × {zips} ZIP · {total} audits",
     employerHomeReferenceTitle: "Reference data",
     employerHomeReferenceTag: "Illustrative — not from your audits",
+
+    // ── Patient recent audits ─────────────────────────────────
+    patientHomeRowMeta: "Plan: {plan} · Needs: {needs}",
+    patientHomeRowGhost: "{pct}% ghost",
+
+    // ── Employer audit executive drill-down ───────────────────
+    employerDetailEyebrow: "Audit detail",
+    employerDetailLede:
+      "A compact, HR-grade view of this single audit. Aggregate signal only — per-call transcripts are not surfaced here.",
+    employerDetailHighGhost: "High ghost rate",
+    employerDetailKpiCalls: "Calls done",
+    employerDetailKpiGhost: "Ghost rate",
+    employerDetailKpiReal: "Real / usable",
+    employerDetailKpiVoicemail: "Voicemail",
+    employerDetailConcerning: "Most concerning ghosts",
+    employerDetailConcerningEmpty:
+      "No ghost outcomes yet in this audit. We'll surface up to three of the most concerning rows here once calls complete.",
+    employerDetailNoTranscripts:
+      "Per-call transcripts are kept in audit logs and surfaced only on the patient experience.",
+    employerDetailMissingTitle: "Audit not found",
+    employerDetailMissing:
+      "We couldn't find this audit. If it was simulated in another browser, it will not appear here.",
   },
 };
 

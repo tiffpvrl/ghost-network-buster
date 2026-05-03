@@ -6,6 +6,7 @@ import {
   updateBatchStatus,
   type EmployerBatch,
 } from "../../data/employerBatches";
+import { getSimSummary, isSimAuditId } from "../../data/employerSim";
 import { useLocale } from "../../locale";
 
 type ChildSummary = AuditSummary | { audit_id: string; status: "pending" | "error"; error?: string };
@@ -41,6 +42,19 @@ export default function EmployerBatchPage() {
       for (const child of batch.audits) {
         const cur = next[child.id];
         if (cur && isFullSummary(cur) && (cur.status === "completed" || cur.status === "failed")) {
+          continue;
+        }
+        if (isSimAuditId(child.id)) {
+          const s = getSimSummary(child.id);
+          if (s) {
+            next[child.id] = s;
+          } else {
+            next[child.id] = {
+              audit_id: child.id,
+              status: "error",
+              error: "Simulated audit not found in this browser.",
+            };
+          }
           continue;
         }
         try {
@@ -181,9 +195,7 @@ export default function EmployerBatchPage() {
                 : "—";
             const status = s && isFullSummary(s) ? s.status : s ? s.status : "pending";
             const isLive = status === "running" || status === "pending";
-            const detailHref = isLive
-              ? `/app/employer/audits/${child.id}`
-              : `/app/employer/results/${child.id}`;
+            const detailHref = `/app/employer/audits/${child.id}`;
             return (
               <tr key={child.id}>
                 <td>{child.carrier}</td>

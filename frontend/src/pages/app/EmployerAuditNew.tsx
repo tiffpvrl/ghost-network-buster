@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { ApiError, apiPost, type PlanType } from "../../api";
+import { type PlanType } from "../../api";
 import { useAuth } from "../../auth/AuthProvider";
 import { PRESET_CARRIERS } from "../../data/carriers";
 import { saveBatch, type BatchAuditChild } from "../../data/employerBatches";
+import { simulateAudit } from "../../data/employerSim";
 import { useLocale } from "../../locale";
 
 const CARE_OPTIONS = [
@@ -89,32 +90,15 @@ export default function EmployerAuditNew() {
     const pairs: { carrier: string; zip: string }[] = [];
     for (const c of carriers) for (const z of zips) pairs.push({ carrier: c, zip: z });
 
-    const results = await Promise.allSettled(
-      pairs.map(({ carrier, zip }) =>
-        apiPost<{ audit_id: string }>("/api/start-audit", {
-          carrier,
-          zip_code: zip,
-          care_needs: needs,
-          plan_type: planType,
-          recording_consent: consentRecord,
-          terms_acknowledged: consentTerms,
-        }).then((r) => ({ id: r.audit_id, carrier, zip })),
-      ),
-    );
-
-    const audits: BatchAuditChild[] = [];
-    let firstErr: string | null = null;
-    for (const r of results) {
-      if (r.status === "fulfilled") audits.push(r.value);
-      else if (!firstErr)
-        firstErr = r.reason instanceof ApiError ? r.reason.message : String(r.reason);
-    }
-
-    if (audits.length === 0) {
-      setSubmitting(false);
-      setErr(firstErr ?? t("employerFormSubmitError"));
-      return;
-    }
+    const audits: BatchAuditChild[] = pairs.map(({ carrier, zip }) => {
+      const { audit_id } = simulateAudit({
+        carrier,
+        zip,
+        careNeeds: needs,
+        planType,
+      });
+      return { id: audit_id, carrier, zip };
+    });
 
     const batchId = genId();
     saveBatch({
