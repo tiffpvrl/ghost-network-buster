@@ -44,11 +44,13 @@ class SttInterimCommitProcessor(FrameProcessor):
         commit_delay_ms: int = 450,
         min_chars: int = 2,
         enabled: bool = True,
+        diagnostics_enabled: bool = False,
     ) -> None:
         super().__init__()
         self._commit_delay_ms = max(0, commit_delay_ms)
         self._min_chars = max(1, min_chars)
         self._enabled = enabled
+        self._diagnostics_enabled = diagnostics_enabled
 
         self._latest_interim: str = ""
         self._best_interim: str = ""
@@ -142,6 +144,20 @@ class SttInterimCommitProcessor(FrameProcessor):
                     self._pending = self.create_task(
                         self._delayed_commit(snap, uid, lang),
                         name="stt_interim_commit",
+                    )
+                elif snap:
+                    _log = logger.info if self._diagnostics_enabled else logger.debug
+                    _log(
+                        "STT: VAD user stopped but interim too short to commit (%d chars, need %d): %r",
+                        len(snap),
+                        self._min_chars,
+                        snap[:120],
+                    )
+                else:
+                    _log = logger.info if self._diagnostics_enabled else logger.debug
+                    _log(
+                        "STT: VAD user stopped with no Deepgram interim yet — "
+                        "if this repeats, check audio/Deepgram or raise VOICE_VAD_STOP_SECS"
                     )
             return
 

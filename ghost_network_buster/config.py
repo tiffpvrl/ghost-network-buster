@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     voice_stt_interim_commit_min_chars: int = Field(default=2, ge=1, le=32)
     # Log raw Deepgram interim + final lines to server stdout (dev / QA). May contain PHI — off in prod.
     voice_stt_trace_enabled: bool = False
+    # Silero VAD (Pipecat): short stop_secs causes many user-stopped events mid-phrase on phone audio,
+    # which fragments Deepgram utterances. Tune for Twilio 8 kHz if you see VAD spam but no STT.
+    voice_vad_stop_secs: float = Field(default=0.5, ge=0.15, le=2.0)
+    voice_vad_start_secs: float = Field(default=0.2, ge=0.05, le=1.0)
 
     # Cost guard: pipecat audits with more providers than this are rejected unless
     # the request includes "override_cost_guard": true. Set to 0 to disable.

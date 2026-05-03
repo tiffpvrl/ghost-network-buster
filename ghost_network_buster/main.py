@@ -884,7 +884,14 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                 serializer=serializer,
             ),
         )
-        vad = VADProcessor(vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.2)))
+        vad = VADProcessor(
+            vad_analyzer=SileroVADAnalyzer(
+                params=VADParams(
+                    stop_secs=settings.voice_vad_stop_secs,
+                    start_secs=settings.voice_vad_start_secs,
+                ),
+            ),
+        )
         endpointing_opt: Any = (
             False if settings.deepgram_stt_endpointing_ms == 0 else settings.deepgram_stt_endpointing_ms
         )
@@ -905,6 +912,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
             commit_delay_ms=settings.voice_stt_interim_commit_delay_ms,
             min_chars=settings.voice_stt_interim_commit_min_chars,
             enabled=settings.voice_stt_interim_commit_enabled,
+            diagnostics_enabled=settings.voice_stt_trace_enabled,
         )
         llm = _VertexLLMProcessor()
         tts_agg = (
@@ -929,6 +937,8 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                 "tts_sample_rate": settings.deepgram_tts_sample_rate,
                 "tts_text_aggregation": settings.deepgram_tts_text_aggregation,
                 "voice_stt_trace_enabled": settings.voice_stt_trace_enabled,
+                "voice_vad_stop_secs": settings.voice_vad_stop_secs,
+                "voice_vad_start_secs": settings.voice_vad_start_secs,
             },
             hypothesis_id="H_deepgram",
         )
