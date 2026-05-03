@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import type { AuditSummary, CallResult } from "../api";
 import { ApiError, apiGet, downloadPdf } from "../api";
 import StatusLegend from "../components/StatusLegend";
+import { useDashboardFilter } from "../contexts/DashboardFilterContext";
 import { DEMO_AUDIT_ID, DEMO_SUMMARY } from "../demo-data";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useLocale } from "../locale";
@@ -30,6 +31,15 @@ export default function Results() {
 
   const closeShare = useCallback(() => setShareGate(false), []);
   const shareTrapRef = useFocusTrap(shareGate, closeShare);
+
+  const { q: search, setQ: setSearch, setVisible: setSearchVisible } = useDashboardFilter();
+  useEffect(() => {
+    setSearchVisible(true);
+    return () => {
+      setSearchVisible(false);
+      setSearch("");
+    };
+  }, [setSearchVisible, setSearch]);
 
   useEffect(() => {
     if (!auditId || isDemo) return;
@@ -400,23 +410,40 @@ export default function Results() {
 
       <div className="results-section results-section--tail">
         <h2 style={{ marginBottom: "0.75rem" }}>{t("allCallsHeading")}</h2>
-        <div className="tile-grid" style={{ marginBottom: "1.25rem" }}>
-          {summary.results.map((row) => (
-            <div
-              key={`${row.npi}-${row.verified_at}`}
-              className={`tile ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem" }}>
-                <span className="name">{row.provider_name || row.npi}</span>
-                <span className={`pill ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}>
-                  {row.status}
-                </span>
+        {(() => {
+          const trimmed = search.trim().toLowerCase();
+          const rows = trimmed
+            ? summary.results.filter((r) =>
+                `${r.provider_name ?? ""} ${r.npi}`.toLowerCase().includes(trimmed),
+              )
+            : summary.results;
+          return (
+            <>
+              {trimmed ? (
+                <p className="lede" style={{ fontSize: "0.78rem", marginBottom: "0.5rem" }}>
+                  Showing {rows.length} of {summary.results.length} calls matching “{search}”.
+                </p>
+              ) : null}
+              <div className="tile-grid" style={{ marginBottom: "1.25rem" }}>
+                {rows.map((row) => (
+                  <div
+                    key={`${row.npi}-${row.verified_at}`}
+                    className={`tile ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem" }}>
+                      <span className="name">{row.provider_name || row.npi}</span>
+                      <span className={`pill ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}>
+                        {row.status}
+                      </span>
+                    </div>
+                    {row.ghost_reason && <div className="meta">{ghostReasonLabelLong(row.ghost_reason)}</div>}
+                    {row.summary && !row.ghost_reason && <div className="meta">{row.summary.slice(0, 55)}</div>}
+                  </div>
+                ))}
               </div>
-              {row.ghost_reason && <div className="meta">{ghostReasonLabelLong(row.ghost_reason)}</div>}
-              {row.summary && !row.ghost_reason && <div className="meta">{row.summary.slice(0, 55)}</div>}
-            </div>
-          ))}
-        </div>
+            </>
+          );
+        })()}
 
         <Link to="/app/patient" className="print-hidden" style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
           {t("newAudit")}

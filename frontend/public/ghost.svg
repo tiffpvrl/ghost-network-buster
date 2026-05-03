@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="Ghost">
+  <path
+    fill="#0b6e8c"
+    fill-rule="evenodd"
+    clip-rule="evenodd"
+    d="M4 11a8 8 0 0 1 16 0v8q0 3-2 0-2-3-4 0-2 3-4 0-2-3-4 0-2 3-4 0V11Zm4.6.5a1.3 1.6 0 1 0 2.6 0a1.3 1.6 0 1 0 -2.6 0Zm4.8 0a1.3 1.6 0 1 0 2.6 0a1.3 1.6 0 1 0 -2.6 0Z"
+  />
+</svg>

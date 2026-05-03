@@ -3,18 +3,13 @@ import {
   useCallback,
   useContext,
   useMemo,
-  useState,
   type ReactNode,
 } from "react";
 
-const STORAGE_KEY = "gnb_locale";
-
-export type Locale = "en" | "es";
+export type Locale = "en";
 
 const DICT: Record<Locale, Record<string, string>> = {
   en: {
-    langToggle: "Español",
-    langToggleEs: "English",
     skipToMain: "Skip to main content",
     navPatientAudit: "Patient audit",
     navEmployer: "Employer",
@@ -156,16 +151,37 @@ const DICT: Record<Locale, Record<string, string>> = {
       "Ghost Network Buster is an educational research project. Results describe what staff said on the call — they are not a guarantee of coverage and are not legal or medical advice.",
     homeTrustCrisis: "If you are in crisis, call or text",
     pricingEyebrow: "Pricing",
-    pricingTitle: "Pay per audit. No subscription.",
+    pricingTitle: "Built for two very different motivations.",
     pricingLede:
-      "One flat fee per audit, no monthly minimums. Audits include the live calls, shortlist, and downloadable summary.",
-    pricingCardEyebrow: "Per-audit credit",
-    pricingPerAudit: "/ audit",
-    pricingIncl1: "Live verification calls against your carrier’s directory sample",
-    pricingIncl2: "Shortlist of listings that passed verification",
-    pricingIncl3: "Downloadable PDF summary and CSV of all calls",
-    pricingIncl4: "Draft complaint letter when the result qualifies",
-    pricingCta: "Sign up to get started",
+      "Patients pay only when they want results they can act on. Employers pay for compliance evidence they can put in a filing cabinet.",
+    pricingIndividualsTitle: "For individuals",
+    pricingIndividualsLead: "Free to run · pay only to unlock results that matter to you.",
+    pricingUnlockTitle: "Audit unlock",
+    pricingUnlockUnit: "/ audit",
+    pricingUnlockBody:
+      "Unlock the full shortlist of usable providers from your audit run. One-time charge per audit — no subscription.",
+    pricingBundleTitle: "Full Report + Complaint Letter",
+    pricingBundleUnit: "/ bundle",
+    pricingBundleBody:
+      "Everything in Audit unlock, plus a downloadable, statute-cited complaint draft you can take to your state insurance department.",
+    pricingIndividualsParagraph:
+      "Patients run the audit for free and see 1–2 provider results (either ghost or not). To unlock the full shortlist and download the complaint letter, they pay $4.99 per audit. No subscription — patients don’t audit monthly, they audit once when they’re desperate. The gate is placed at exactly the moment of maximum motivation: they’ve just watched 6 out of 8 listings come back as ghosts and there are 2 real providers they can’t yet see. A $12.99 “Full Report + Complaint Letter” bundle is offered for patients who want to escalate to their state insurance department — a meaningfully different intent that commands a higher price. The mental anchor is one therapy copay (~$30–50); $4.99 is an impulse buy by comparison.",
+    pricingBusinessesTitle: "For businesses",
+    pricingBusinessesLead:
+      "Compliance-grade audits, packaged for renewal and regulator-ready filing.",
+    pricingTierStarterName: "Starter",
+    pricingTierStarterPrice: "$299",
+    pricingTierStarterBody:
+      "100–500 employees · 1 carrier audit / month · PDF compliance report.",
+    pricingTierGrowthName: "Growth",
+    pricingTierGrowthPrice: "$799",
+    pricingTierGrowthBody:
+      "500–2,000 employees · 3 carriers · multi-ZIP · quarterly trend reports.",
+    pricingTierEnterpriseName: "Enterprise",
+    pricingTierEnterprisePrice: "Custom",
+    pricingTierEnterpriseBody:
+      "2,000+ employees · unlimited carriers · API access · regulator-ready filing package (~$2,000–4,000 / month).",
+    pricingTierMonthly: "/ month",
     pricingNote: "Demo checkout in this build — no card is charged.",
     pricingFaqTitle: "Frequently asked",
     pricingFaq1Q: "Does this guarantee my plan will pay?",
@@ -176,6 +192,7 @@ const DICT: Record<Locale, Record<string, string>> = {
     pricingFaq3Q: "Do you store my health information?",
     pricingFaq3A:
       "We store the carrier, plan label, ZIP, and call transcripts — never diagnoses or claims. See the privacy summary for retention details.",
+    pricingCta: "Sign up to get started",
     howEyebrow: "How it works",
     howTitle: "Three steps from listing to live verification.",
     howLede: "Most audits finish in under two minutes from start to summary.",
@@ -241,263 +258,19 @@ const DICT: Record<Locale, Record<string, string>> = {
     employerWorkspaceBody:
       "All figures below are illustrative aggregates with no PHI and are not tied to live patient audits. Useful for renewal storytelling.",
   },
-  es: {
-    langToggle: "English",
-    langToggleEs: "English",
-    skipToMain: "Saltar al contenido principal",
-    navPatientAudit: "Auditoría para pacientes",
-    navEmployer: "Empleador",
-    navBrand: "Ghost Network Buster",
-    crisis988: "Línea 988",
-    crisis988Short: "Si hay crisis, llame o envíe un mensaje de texto al",
-    crisisLinks: "988lifeline.org",
-    crisisNyc: "NYC Well",
-    noticesTitle: "Crisis y uso de enlaces",
-    shareModalTitle: "¿Compartir este enlace?",
-    shareModalBody:
-      "Cualquiera con el enlace puede leer transcripciones y datos del proveedor. No lo publique ni lo comparta con personas en las que no confíe.",
-    shareModalCancel: "Cancelar",
-    shareModalCopy: "Copiar enlace",
-    shareModalCopied: "Copiado",
-    copyShareButton: "Copiar enlace para compartir",
-    loading: "Cargando…",
-    loadingResults: "Cargando resultados…",
-    linkExpiredTitle: "Este enlace de resultados ha caducado",
-    linkExpiredBody:
-      "Los enlaces compartidos dejan de funcionar tras el periodo de retención del servidor. Inicie una nueva auditoría desde la página principal.",
-    genericErrorTitle: "No se pudieron cargar los resultados",
-    genericErrorBody: "Intente de nuevo o inicie una nueva auditoría desde la página principal.",
-    noticesShareOnly:
-      "Cualquiera con este enlace puede leer transcripciones y datos del proveedor — no lo publique.",
-    authErrorTitle: "No se pudo autorizar",
-    authErrorBody:
-      "El servidor rechazó la solicitud. Si usa una clave de demostración, configure el mismo valor en VITE_DEMO_API_KEY.",
-    newAudit: "← Nueva auditoría",
-    resultsMetaComplete: "Auditoría completa",
-    resultsH1Usable: "Encontramos {n} contactos posiblemente útiles — de {total} auditados.",
-    resultsH1HighGhost: "La mayoría parece inusable, pero {n} podrían servir — de {total} auditados.",
-    resultsH1Zero: "Ningún contacto útil en esta ronda — {total} auditados.",
-    resultsLedeMixed:
-      "Muchas filas del directorio no se confirmaron por teléfono. La lista corta aún puede ayudar — confirme todo antes de reservar.",
-    zeroResultsTitle: "Llevar este resultado puede ser muy difícil",
-    zeroResultsBody:
-      "Si puede, use el 988 para apoyo inmediato. Aún puede descargar el registro de llamadas y un borrador de queja (si aplica). Esta herramienta no es asesoría médica ni legal.",
-    verifyContextNote:
-      "Las llamadas mencionaron {carrier}. {plan}{card}Lo que dijo recepción describe la red solo al momento de la llamada.",
-    planTypePrefix: "Tipo de plan: {type}. ",
-    memberCardPrefix: "Plan en la tarjeta: {label}. ",
-    shortlistHeading: "Lista corta (útiles en esta ronda)",
-    shortlistEmpty: "Ningún contacto cumplió el criterio de “útil” en esta auditoría.",
-    allCallsHeading: "Todas las llamadas",
-    downloadsHeading: "Descargas y compartir",
-    downloadPdf: "Resumen (PDF)",
-    downloadCsv: "Resultados (CSV)",
-    downloadComplaint: "Borrador de queja",
-    complaintGenerating: "Generando…",
-    regulatoryAlert:
-      "Muchas filas inalcanzables o incorrectas pueden ser motivo de reporte ante el departamento de seguros del estado o el plan. Revise opciones oficiales de quejas con un defensor o abogado; no ofrecemos asesoría legal.",
-    legendTitle: "Resultados de llamadas",
-    legendReal: "Real — recepción indicó que el contacto sirvió para su consulta.",
-    legendGhost:
-      "Fantasma — número incorrecto, red incorrecta, panel cerrado u otro dato inválido.",
-    legendUnconfirmed:
-      "Buzón de voz / sin respuesta — no confirmado; no es lo mismo que “fantasma”.",
-    legendError: "Error — problema técnico en la llamada; verifique de nuevo.",
-    landingSubtitleWithCount:
-      "Esta muestra lista {count} proveedores. Hacemos llamadas en paralelo para ver cuántos contactos parecen útiles.",
-    landingSubtitleGeneric:
-      "Hacemos llamadas en paralelo al directorio de muestra de su aseguradora para ver cuántos contactos parecen útiles.",
-    landingWhyExists: "Por qué existe",
-    landingStart: "Iniciar su auditoría",
-    landingCarrier: "Aseguradora",
-    landingCarrierOther: "Nombre de la aseguradora (como en su tarjeta)",
-    landingPlanType: "Tipo de plan (interpreta resultados)",
-    landingMemberPlan: "Nombre del plan en la tarjeta (opcional)",
-    landingZip: "Código postal",
-    landingZipHint: "Solo ZIP — sin dirección física.",
-    landingZipErr: "Use 5 dígitos o ZIP+4.",
-    landingCareNeeds: "Necesidades de atención",
-    landingExpectTitle: "Qué esperar",
-    landingExpectParallel: "Llamadas en paralelo; puede caer en buzón de voz fuera de horario.",
-    landingExpectDuration: "Duración aprox.: ~{sec}s para {count} proveedores en esta muestra.",
-    landingExpectDurationFallback: "Duración típica: {hint} en este entorno.",
-    landingExpectOutcome:
-      "Lo que dijo el personal es solo en el momento de la llamada — no garantiza pago.",
-    landingConsentCalls: "Términos (llamadas)",
-    landingConsentPrivacy: "Privacidad",
-    landingStartBtn: "Iniciar llamadas ({count})",
-    landingStarting: "Iniciando {count} llamadas…",
-    landingDemo: "Ver demo (sin llamadas)",
-    landingFooter: "No se requiere cuenta.",
-    landingFooterCount: "Esta versión audita hasta {count} contactos de muestra.",
-    landingFooterSize: "El tamaño de la muestra carga del servidor.",
-    landingFooterRetention: "Conservación de datos: vea la privacidad del despliegue.",
-    employerBanner:
-      "Solo ilustrativo: datos simulados, sin PHI, no ligado a auditorías reales.",
-    landingConsentRequired: "Confirme el consentimiento y los términos antes de continuar.",
-    landingOtherCarrierRequired: "Escriba el nombre de la aseguradora o elija una de la lista.",
-    legalDraftBanner:
-      "Borrador solo para fines educativos — no es asesoría legal.",
-    dashboardWsConnecting: "Estableciendo conexión en vivo…",
-    dashboardMissingAudit: "Falta el id de auditoría.",
-    resultsViewTranscript: "Ver transcripción",
-    resultsHideTranscript: "Ocultar transcripción",
-    resultsUsableBadge: "ÚTIL — recepción confirmó red/intake el {when}",
-    resultsPhoneOnFile: "Teléfono registrado:",
-    resultsGhostBreakdown: "Desglose de “fantasmas”",
-    resultsComplaintDraft: "Borrador de queja →",
-    resultsDownloading: "Descargando…",
-    themeUseDark: "Oscuro",
-    themeUseLight: "Claro",
-    themeAriaDark: "Cambiar a tema oscuro",
-    themeAriaLight: "Cambiar a tema claro",
-    stepperLabel: "Progreso de la auditoría",
-    stepperLive: "Llamadas en vivo",
-    stepperShortlist: "Lista corta",
-    stepperResults: "Resultados completos",
-    navHome: "Inicio",
-    navHow: "Cómo funciona",
-    navPricing: "Precios",
-    navLogin: "Iniciar sesión",
-    navAppHome: "Mi espacio",
-    homeEyebrow: "Audite el directorio de su seguro",
-    homeTitle: "Encuentre proveedores que su plan realmente cubre, antes de necesitarlos.",
-    homeLede:
-      "Hacemos llamadas reales de verificación al directorio de muestra de su aseguradora y le decimos qué contactos son útiles.",
-    homeCtaSignup: "Empezar",
-    homeCtaLogin: "Iniciar sesión",
-    homeTrust: "No es asesoría médica ni legal. ¿En crisis? Llame o envíe SMS al 988.",
-    homeWhoTitle: "Para quién es",
-    homePatientEyebrow: "Para pacientes",
-    homePatientTitle: "Deje de perseguir contactos muertos.",
-    homePatientBody:
-      "Realice una auditoría del directorio de salud conductual de su plan. Vea quién contesta, acepta su plan y recibe pacientes nuevos.",
-    homePatientCta: "Audito para mí",
-    homeEmployerEyebrow: "Para empleadores / RR. HH.",
-    homeEmployerTitle: "Datos para conversaciones de renovación.",
-    homeEmployerBody:
-      "Tasas de fantasma por aseguradora, especialidades rotas y una estimación conservadora de exposición — solo agregados ilustrativos.",
-    homeEmployerCta: "Audito para una organización",
-    homeWhatTitle: "Qué obtiene",
-    homeWhatBullet1: "Desglose de tasas: real, fantasma y buzón de voz.",
-    homeWhatBullet2: "Una lista corta de contactos verificados.",
-    homeWhatBullet3: "Borrador opcional de queja cuando el resultado lo amerita.",
-    homeLearnMore: "Cómo funciona",
-    homePricingCta: "Ver precios",
-    homeTrustTitle: "Sobre esta herramienta",
-    homeTrustBody:
-      "Ghost Network Buster es un proyecto educativo. Reflejamos lo dicho en la llamada — no garantiza cobertura ni es asesoría legal/médica.",
-    homeTrustCrisis: "Si hay crisis, llame o envíe SMS al",
-    pricingEyebrow: "Precios",
-    pricingTitle: "Pago por auditoría. Sin suscripción.",
-    pricingLede:
-      "Un solo precio por auditoría, sin mínimos mensuales. Incluye llamadas, lista corta y resumen descargable.",
-    pricingCardEyebrow: "Crédito por auditoría",
-    pricingPerAudit: "/ auditoría",
-    pricingIncl1: "Llamadas en vivo a la muestra del directorio de su aseguradora",
-    pricingIncl2: "Lista corta de contactos verificados",
-    pricingIncl3: "PDF descargable y CSV de todas las llamadas",
-    pricingIncl4: "Borrador de queja cuando aplica",
-    pricingCta: "Crear cuenta",
-    pricingNote: "Pago de demostración — no se cobra ninguna tarjeta.",
-    pricingFaqTitle: "Preguntas frecuentes",
-    pricingFaq1Q: "¿Garantiza que mi plan pagará?",
-    pricingFaq1A:
-      "No. Reflejamos lo que recepción dijo en la llamada. Siempre reconfirme la cobertura con su plan antes de reservar.",
-    pricingFaq2Q: "¿Puedo correr más de una auditoría?",
-    pricingFaq2A: "Sí — compre otro crédito en cualquier momento desde el menú de su cuenta.",
-    pricingFaq3Q: "¿Almacenan mi información médica?",
-    pricingFaq3A:
-      "Guardamos aseguradora, etiqueta del plan, ZIP y transcripciones — nunca diagnósticos ni reclamos.",
-    howEyebrow: "Cómo funciona",
-    howTitle: "Tres pasos: del listado a la verificación en vivo.",
-    howLede: "La mayoría de auditorías terminan en menos de dos minutos.",
-    howStep1Title: "Elija aseguradora y plan",
-    howStep1Body:
-      "Indíquenos la aseguradora, el tipo de plan en su tarjeta y el ZIP. Usamos el ZIP solo para contexto del directorio.",
-    howStep2Title: "Llamadas paralelas de verificación",
-    howStep2Body:
-      "Nuestro agente de voz llama a una muestra del directorio en red, hace preguntas de intake y guarda la transcripción.",
-    howStep3Title: "Recibe un resumen claro",
-    howStep3Body:
-      "Conteos real, fantasma, buzón y error, más una lista corta útil. Si la tasa es alta, descargue un borrador de queja.",
-    howPreviewCaption:
-      "Cada tarjeta es un resultado real de llamada con su transcripción. Filtre, busque y fije transcripciones en el panel en vivo.",
-    howCtaSignup: "Empezar",
-    howCtaPricing: "Ver precios",
-    authLoginEyebrow: "Bienvenido",
-    authLoginTitle: "Inicie sesión",
-    authSignupEyebrow: "Crear cuenta",
-    authSignupTitle: "Cree su cuenta para empezar",
-    authDemoNotice:
-      "Build de demostración: las credenciales se guardan solo en su navegador y no hay verificación real de contraseña.",
-    authEmail: "Correo electrónico",
-    authPassword: "Contraseña",
-    authLoginCta: "Continuar",
-    authSignupCta: "Crear cuenta",
-    authLoginNoAccount: "¿Eres nuevo?",
-    authSignupHaveAccount: "¿Ya tienes una cuenta?",
-    authSignupLink: "Crear cuenta",
-    authLoginLink: "Iniciar sesión",
-    authErrEmail: "Ingrese un correo válido.",
-    authErrPassword: "Ingrese su contraseña.",
-    authErrPasswordMin: "La contraseña debe tener al menos 6 caracteres.",
-    authRoleQuestion: "Audito para:",
-    roleSelf: "Mí mismo",
-    roleSelfBody: "Busco atención en red para mí o mi hogar.",
-    roleEmployer: "Una organización",
-    roleEmployerBody: "Evalúo redes para empleados o un equipo de beneficios.",
-    checkoutEyebrow: "Pago",
-    checkoutTitle: "Compre 1 crédito de auditoría",
-    checkoutItem: "1 crédito de auditoría",
-    checkoutTotal: "Total",
-    checkoutWhat: "Los créditos no caducan. Puede iniciar una auditoría inmediatamente.",
-    checkoutPay: "Pagar ${price} (demo)",
-    checkoutProcessing: "Procesando…",
-    checkoutCancel: "Cancelar y volver al espacio",
-    appLogout: "Cerrar sesión",
-    appBuyCredits: "Comprar más créditos",
-    appWorkspacePatient: "Espacio de paciente",
-    appWorkspaceEmployer: "Espacio de empleador",
-    creditsLabel: "créditos",
-    patientHomeEyebrow: "Espacio de paciente",
-    patientHomeGreeting: "Bienvenido, {email}.",
-    patientHomeBody:
-      "Cada auditoría llama a una muestra del directorio en red de su aseguradora. Un crédito cubre una auditoría.",
-    patientHomeStartCta: "Iniciar nueva auditoría",
-    patientHomeBuyAndStartCta: "Comprar un crédito para empezar",
-    patientHomeDemoCta: "Ver demo (sin llamadas)",
-    patientHomeRecentTitle: "Auditorías recientes",
-    patientHomeRecentEmpty:
-      "Pronto: historial por cuenta. Por ahora, los resultados se acceden desde el enlace que recibe al final.",
-    employerWorkspaceTitle: "Espacio de empleador",
-    employerWorkspaceBody:
-      "Todas las cifras son agregados ilustrativos sin PHI y no están vinculadas a auditorías reales.",
-  },
 };
-
-function storedLocale(): Locale {
-  if (typeof window === "undefined") return "en";
-  return window.localStorage.getItem(STORAGE_KEY) === "es" ? "es" : "en";
-}
 
 type LocaleValue = {
   locale: Locale;
-  setLocale: (l: Locale) => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
 };
 
 const LocaleContext = createContext<LocaleValue | null>(null);
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(storedLocale);
-  const setLocale = useCallback((l: Locale) => {
-    window.localStorage.setItem(STORAGE_KEY, l);
-    setLocaleState(l);
-  }, []);
   const t = useCallback(
     (key: string, vars?: Record<string, string | number>) => {
-      let s = DICT[locale][key] ?? DICT.en[key] ?? key;
+      let s = DICT.en[key] ?? key;
       if (vars) {
         for (const [k, v] of Object.entries(vars)) {
           s = s.replaceAll(`{${k}}`, String(v));
@@ -505,9 +278,9 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       }
       return s;
     },
-    [locale],
+    [],
   );
-  const value = useMemo(() => ({ locale, setLocale, t }), [locale, setLocale, t]);
+  const value = useMemo<LocaleValue>(() => ({ locale: "en", t }), [t]);
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
 }
 

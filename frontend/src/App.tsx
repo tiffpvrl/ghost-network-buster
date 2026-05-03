@@ -22,9 +22,8 @@ import Pricing from "./pages/marketing/Pricing";
 const THEME_KEY = "gnb_theme";
 
 function TopNav() {
-  const { locale, setLocale, t } = useLocale();
+  const { t } = useLocale();
   const { user } = useAuth();
-  const otherLocale = locale === "en" ? "es" : "en";
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "dark"
       ? "dark"
@@ -80,14 +79,6 @@ function TopNav() {
           aria-label={theme === "light" ? t("themeAriaDark") : t("themeAriaLight")}
         >
           {theme === "light" ? t("themeUseDark") : t("themeUseLight")}
-        </button>
-        <button
-          type="button"
-          className="locale-toggle print-hidden"
-          onClick={() => setLocale(otherLocale)}
-          aria-label={locale === "en" ? "Switch to Spanish" : "Switch to English"}
-        >
-          {locale === "en" ? t("langToggle") : t("langToggleEs")}
         </button>
       </nav>
     </header>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthProvider";
+import { DashboardFilterProvider, useDashboardFilter } from "../../contexts/DashboardFilterContext";
 import { useLocale } from "../../locale";
 
 function SideIcon({ d, children }: { d?: string; children?: React.ReactNode }) {
@@ -12,8 +13,8 @@ function SideIcon({ d, children }: { d?: string; children?: React.ReactNode }) {
 }
 
 export default function AppLayout() {
-  const { t, locale, setLocale } = useLocale();
-  const { user, credits, logout } = useAuth();
+  const { t } = useLocale();
+  const { user, logout } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
 
@@ -57,28 +58,22 @@ export default function AppLayout() {
   ];
 
   return (
+    <DashboardFilterProvider>
     <div className="app" id="main-content">
       {/* ── Sidebar ── */}
       <aside className="beacon-sidebar">
         <div className="brand-row">
           <div className="brand-mark">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M12 3 L20 8 L20 16 L12 21 L4 16 L4 8 Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
-              <circle cx="12" cy="12" r="2.5" fill="currentColor"/>
+            <svg viewBox="0 0 24 24" aria-hidden>
+              <path
+                fill="currentColor"
+                fillRule="evenodd"
+                clipRule="evenodd"
+                d="M4 11a8 8 0 0 1 16 0v8q0 3-2 0-2-3-4 0-2 3-4 0-2-3-4 0-2 3-4 0V11Zm4.6.5a1.3 1.6 0 1 0 2.6 0a1.3 1.6 0 1 0 -2.6 0Zm4.8 0a1.3 1.6 0 1 0 2.6 0a1.3 1.6 0 1 0 -2.6 0Z"
+              />
             </svg>
           </div>
           <div className="brand-name">GNB<span className="dot">.</span></div>
-        </div>
-
-        <div className="org-switcher" role="button" tabIndex={0}>
-          <div className="org-info">
-            <div className="org-avatar">{initials}</div>
-            <div className="org-text">
-              <div className="org-name">{user.email.split("@")[1] ?? user.email}</div>
-              <div className="org-plan">{user.role === "employer" ? "Employer" : "Patient"} · {credits} credits</div>
-            </div>
-          </div>
-          <svg className="org-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}><path d="M6 9l6 6 6-6"/></svg>
         </div>
 
         <nav className="sidebar-nav-section">
@@ -108,14 +103,6 @@ export default function AppLayout() {
             <SideIcon><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></SideIcon>
             {theme === "light" ? t("themeUseDark") : t("themeUseLight")}
           </button>
-          <button
-            type="button"
-            className="sidebar-nav-item"
-            onClick={() => setLocale(locale === "en" ? "es" : "en")}
-          >
-            <SideIcon><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></SideIcon>
-            {locale === "en" ? t("langToggle") : t("langToggleEs")}
-          </button>
         </nav>
 
         <div className="sidebar-footer">
@@ -144,12 +131,7 @@ export default function AppLayout() {
             ))}
           </div>
           <div className="topbar-actions-row">
-            <div className="topbar-search-box">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-              </svg>
-              <input placeholder="Search providers, audits…" />
-            </div>
+            <TopbarSearch />
             <NavLink to="/checkout" className="topbar-icon-btn" title={t("appBuyCredits")}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
@@ -161,6 +143,27 @@ export default function AppLayout() {
           <Outlet />
         </div>
       </div>
+    </div>
+    </DashboardFilterProvider>
+  );
+}
+
+/** Topbar search input — only renders on dashboard / results routes that
+ * register `visible` on the shared DashboardFilterContext. */
+function TopbarSearch() {
+  const { q, setQ, visible } = useDashboardFilter();
+  if (!visible) return null;
+  return (
+    <div className="topbar-search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input
+        placeholder="Search providers or NPI…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        aria-label="Filter providers"
+      />
     </div>
   );
 }

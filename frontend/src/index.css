@@ -789,20 +789,6 @@ textarea:focus-visible {
 .grid { display: grid; gap: 1rem; }
 @media (min-width: 860px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
 
-/* ── Confetti ────────────────────────────────── */
-@keyframes confetti-fall {
-  0%   { transform: translateY(-10px) rotate(0deg) translateX(0); opacity: 1; }
-  100% { transform: translateY(100vh) rotate(540deg) translateX(30px); opacity: 0; }
-}
-.confetti-piece {
-  position: fixed;
-  width: 5px; height: 5px;
-  pointer-events: none;
-  animation: confetti-fall linear forwards;
-  z-index: 9999;
-  border-radius: 1px;
-}
-
 .pill-inner {
   display: inline-flex;
   align-items: center;
@@ -897,11 +883,6 @@ textarea:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .confetti-piece {
-    animation: none !important;
-    opacity: 0;
-    visibility: hidden;
-  }
   .btn.cta {
     animation: none !important;
   }
@@ -1060,30 +1041,6 @@ textarea:focus-visible {
   letter-spacing: -0.015em; color: var(--text);
 }
 .brand-name .dot { color: var(--accent); }
-
-.org-switcher {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0.55rem 0.65rem;
-  border: 1px solid var(--border); border-radius: 8px;
-  background: var(--surface); cursor: pointer;
-  transition: border-color .15s, background .15s;
-  margin-bottom: 0.25rem;
-}
-.org-switcher:hover { border-color: var(--border-2); background: var(--surface-2); }
-.org-info { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
-.org-avatar {
-  width: 22px; height: 22px; border-radius: 5px;
-  background: linear-gradient(135deg, #fda4af, #fb7185);
-  display: grid; place-items: center; color: white;
-  font-size: 0.65rem; font-weight: 700; flex-shrink: 0;
-}
-.org-text { min-width: 0; }
-.org-name {
-  font-size: 0.78rem; font-weight: 600; color: var(--text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.org-plan { font-size: 0.65rem; color: var(--muted); }
-.org-chev { color: var(--muted-2); flex-shrink: 0; width: 13px; height: 13px; }
 
 .sidebar-nav-section { display: flex; flex-direction: column; gap: 1px; }
 .sidebar-section-label {
@@ -1865,6 +1822,110 @@ table.beacon-providers tbody td.num { text-align: right; font-feature-settings: 
   color: var(--muted);
   text-align: center;
   margin-top: 0.75rem;
+}
+
+.pricing-section-head {
+  margin-bottom: 1.5rem;
+}
+
+.price-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  max-width: 760px;
+}
+
+.price-mini-grid .price-card {
+  max-width: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.price-card--accent {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  box-shadow: 0 6px 28px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.price-card__amount + .price-card__note {
+  text-align: left;
+}
+
+.pricing-individuals-paragraph {
+  max-width: 70ch;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--muted);
+  margin-top: 1.5rem;
+}
+
+.tier-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.tier-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.6fr) minmax(120px, 0.6fr) minmax(0, 2fr);
+  align-items: center;
+  gap: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem 1.15rem;
+}
+
+.tier-row--accent {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.tier-row__name {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+
+.tier-row__price {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.tier-row__amount {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.4rem;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.tier-row__unit {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.tier-row__body {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 700px) {
+  .tier-row {
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+  }
 }
 
 .faq {

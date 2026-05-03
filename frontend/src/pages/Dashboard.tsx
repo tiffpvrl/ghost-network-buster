@@ -4,6 +4,7 @@ import type { AuditSummary, CallResult } from "../api";
 import { ApiError, apiGet } from "../api";
 import { isSoundEnabled, playCallSound, playComplete, setSoundEnabled } from "../audio";
 import AuditStepper from "../components/AuditStepper";
+import { useDashboardFilter } from "../contexts/DashboardFilterContext";
 import { DEMO_AUDIT_ID, DEMO_REPLAY_INTERVAL_MS, DEMO_SUMMARY } from "../demo-data";
 import { ghostReasonLabelShort } from "../labels";
 import { useLocale } from "../locale";
@@ -22,7 +23,6 @@ function SI({ d, sw = 1.75, children, ...p }: { d?: string; sw?: number; childre
 const IcoAlert = (p: SVGProps<SVGSVGElement>) =><SI {...p}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></SI>;
 const IcoCheck = (p: SVGProps<SVGSVGElement>) => <SI {...p} d="M20 6L9 17l-5-5" />;
 const IcoX = (p: SVGProps<SVGSVGElement>) => <SI {...p} d="M18 6L6 18M6 6l12 12" />;
-const IcoPhone = (p: SVGProps<SVGSVGElement>) => <SI {...p} d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />;
 const IcoVoicemail = (p: SVGProps<SVGSVGElement>) => <SI {...p}><circle cx="6" cy="12" r="4"/><circle cx="18" cy="12" r="4"/><line x1="6" y1="16" x2="18" y2="16"/></SI>;
 const IcoDownload = (p: SVGProps<SVGSVGElement>) => <SI {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><line x1="12" y1="15" x2="12" y2="3"/></SI>;
 const IcoSparkles = (p: SVGProps<SVGSVGElement>) => <SI {...p} d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17l-1.9-5.1L4.5 10l5.6-1.4z" />;
@@ -182,17 +182,6 @@ function KPI({ label, icon, value, unit, trend, trendDir, foot, spark, sparkColo
   );
 }
 
-/* ── Confetti ────────────────────────────────────────────────────────────── */
-function Confetti() {
-  const pieces = useMemo(() =>
-    Array.from({ length: 28 }, (_, i) => ({
-      id: i, left: `${Math.random() * 100}%`,
-      color: i % 3 === 0 ? "var(--accent)" : i % 3 === 1 ? "var(--success)" : "var(--warning)",
-      duration: `${1.8 + Math.random() * 1.4}s`, delay: `${Math.random() * 0.8}s`,
-    })), []);
-  return <>{pieces.map(p => <div key={p.id} className="confetti-piece" style={{ left: p.left, top: 0, background: p.color, animationDuration: p.duration, animationDelay: p.delay }} />)}</>;
-}
-
 /* ── usePrefersReducedMotion ─────────────────────────────────────────────── */
 function usePrefersReducedMotion() {
   const [r, setR] = useState(() => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -223,7 +212,16 @@ export default function Dashboard() {
   const [soundOn, setSoundOn] = useState(() => isSoundEnabled());
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterGhost, setFilterGhost] = useState("all");
-  const [search, setSearch] = useState("");
+  const { q: search, setQ: setSearch, setVisible: setSearchVisible } = useDashboardFilter();
+
+  // Show the topbar search input while the dashboard is mounted; reset query on unmount.
+  useEffect(() => {
+    setSearchVisible(true);
+    return () => {
+      setSearchVisible(false);
+      setSearch("");
+    };
+  }, [setSearchVisible, setSearch]);
 
   const prevResults = useRef<Record<string, CallResult>>({});
   const startTime = useRef(Date.now());
@@ -408,9 +406,6 @@ export default function Dashboard() {
   const displayCall = pinnedCall ?? lastCall;
   const tilesClickable = (doneAll || failed) && (summary?.results.length ?? 0) > 0;
 
-  const celebrateEnv = import.meta.env.VITE_CELEBRATE_COMPLETION === "true";
-  const showConfetti = doneAll && !failed && (summary?.real_count ?? 0) > 0 && !prefersReducedMotion && (isDemo || celebrateEnv);
-
   const recentActivity = (summary?.results ?? []).slice(-6).reverse();
   const ghostReasonsInResults = useMemo(() => {
     const s = new Set<string>();
@@ -461,8 +456,6 @@ export default function Dashboard() {
   return (
     <div className="beacon-dashboard">
       <div ref={announceRef} className="sr-only" aria-live="polite" />
-      {showConfetti && <Confetti />}
-
       {/* ── Page header ── */}
       <div className="beacon-page-header">
         <div>
