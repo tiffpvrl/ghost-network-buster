@@ -6,6 +6,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import AsyncGenerator
 
 from google.adk.agents.base_agent import BaseAgent
@@ -493,6 +494,7 @@ async def run_audit_with_adk(
         st = await store.load(audit_id)
         if st and st.status != "failed":
             st.status = "completed"
+            st.completed_at = datetime.now(timezone.utc)
             await store.save(st)
             if broadcast_summary:
                 await broadcast_summary(summary_builder(st, voice_mode))

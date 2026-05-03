@@ -83,6 +83,12 @@ class Settings(BaseSettings):
     # Provider directory JSON (relative to repo root unless absolute)
     providers_data_file: str = "data/providers_sample.json"
 
+    # Ghost rate at or above this value sets summary.high_ghost_rate (UI banners).
+    high_ghost_rate_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+
+    # When > 0, summaries and downloads reject audits older than this many hours (410).
+    share_max_age_hours: int = Field(default=0, ge=0)
+
     # When True, POST /api/start-audit runs the Google ADK root agent (directory → voice →
     # classify → RAG → synthesizer). When False, uses the legacy asyncio pipeline only.
     use_adk_audit: bool = False

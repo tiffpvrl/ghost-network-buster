@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
@@ -106,6 +107,7 @@ async def run_audit_pipeline(
 
         if mark_completed:
             state.status = "completed"
+            state.completed_at = datetime.now(timezone.utc)
             logger.info(
                 "Audit %s completed — %d calls, ghost_rate=%.1f%%, complaint_eligible=%s",
                 audit_id, len(state.results), _ghost_rate(state) * 100,

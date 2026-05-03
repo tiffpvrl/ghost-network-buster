@@ -33,6 +33,10 @@ export default function Employer() {
 
   return (
     <div>
+      <div className="employer-banner banner" role="status">
+        <strong>Illustrative only.</strong> This view is not linked to live patient audits, contains no employee PHI,
+        and uses mock aggregates for classroom / renewal-storytelling purposes.
+      </div>
       <h1>Employer / HR view</h1>
       <p className="lede">
         Illustrative aggregates only — no employee PHI. Designed for renewal conversations:

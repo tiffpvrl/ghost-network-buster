@@ -7,18 +7,21 @@ Cloud Run: set PORT (default 8080). Use GCS buckets for audit + NPI memory when 
 from __future__ import annotations
 
 import asyncio
+import csv
 import json
 import logging
 import re
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+from io import StringIO
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -141,6 +144,7 @@ async def _seed_demo_state(store: AuditStore) -> None:
            transcript="Agent: Hi, calling to confirm whether Brooklyn Mind Collective is accepting new Aetna patients for anxiety and trauma-focused therapy.\nReceptionist: Yes, we are! We have three therapists in-network with Aetna who specialize in anxiety and PTSD.\nAgent: Are they currently taking new patients?\nReceptionist: Two of them are — we can get someone in within two weeks.",
            summary="Confirmed in-network. 2 of 3 therapists accepting. Available within 2 weeks.", verified_at="2026-05-02T10:11:30Z"),
     ]
+    demo_time = datetime.now(timezone.utc)
     state = AuditState(
         audit_id="demo",
         status="completed",
@@ -150,6 +154,11 @@ async def _seed_demo_state(store: AuditStore) -> None:
         carrier="Aetna",
         zip_code="10001",
         care_needs=["Anxiety", "Trauma / PTSD"],
+        started_at=demo_time,
+        completed_at=demo_time,
+        plan_type="commercial",
+        recording_consent=True,
+        terms_acknowledged=True,
     )
     store.cache_put(state)
     await store.save(state)
@@ -202,11 +211,28 @@ def _require_demo_key(
         raise HTTPException(status_code=401, detail="Invalid or missing X-Demo-Api-Key")
 
 
+PlanType = Literal["commercial", "medicaid", "medicare", "employer", "unsure"]
+
+
 class StartAuditRequest(BaseModel):
     carrier: str = Field(default="Aetna")
     zip_code: str = Field(default="10001", min_length=3, max_length=12)
     care_needs: list[str] = Field(default_factory=list)
     email: str | None = Field(default=None, description="Optional; email send not wired in MVP")
+    plan_type: PlanType = Field(default="unsure", description="Insurance product category for this audit context")
+    member_plan_label: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Optional plan name as on member card (for results context only).",
+    )
+    recording_consent: bool = Field(
+        default=False,
+        description="User consents to automated verification calls per posted terms.",
+    )
+    terms_acknowledged: bool = Field(
+        default=False,
+        description="User acknowledges posted terms and limitations.",
+    )
     max_providers: int | None = Field(
         default=None,
         ge=1,
@@ -237,11 +263,35 @@ def _load_sample_providers(limit: int | None, settings: Settings | None = None) 
     return providers
 
 
+def _dt_iso(dt: datetime | None) -> str | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _audit_share_expired(state: AuditState, settings: Settings) -> bool:
+    if settings.share_max_age_hours <= 0 or state.started_at is None:
+        return False
+    start = state.started_at
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    start = start.astimezone(timezone.utc)
+    return datetime.now(timezone.utc) - start > timedelta(hours=settings.share_max_age_hours)
+
+
+def _require_fresh_share(state: AuditState, settings: Settings) -> None:
+    if _audit_share_expired(state, settings):
+        raise HTTPException(status_code=410, detail="This audit share has expired.")
+
+
 def _rag_hits_for_state(state: AuditState) -> list[dict[str, object]]:
     return rag_hits_for_audit_state(state, require_completed=True)
 
 
-def _compute_summary(state: AuditState, voice_mode: str) -> AuditSummary:
+def _compute_summary(state: AuditState, voice_mode: str, settings: Settings | None = None) -> AuditSummary:
+    settings = settings or get_settings()
     results = state.results
     n = len(results)
     denom = n if n > 0 else 1
@@ -253,12 +303,20 @@ def _compute_summary(state: AuditState, voice_mode: str) -> AuditSummary:
     vr = vm / denom
     top = [r for r in results if r.status == "real"][:3]
     rag = _rag_hits_for_state(state) if state.status == "completed" else []
+    high_ghost = gr >= settings.high_ghost_rate_threshold
+    err = state.error if state.status == "failed" else None
     return AuditSummary(
         audit_id=state.audit_id,
         status=state.status,
         carrier=state.carrier,
         zip_code=state.zip_code,
         care_needs=list(state.care_needs),
+        plan_type=state.plan_type,
+        member_plan_label=state.member_plan_label,
+        recording_consent=state.recording_consent,
+        terms_acknowledged=state.terms_acknowledged,
+        started_at=_dt_iso(state.started_at),
+        completed_at=_dt_iso(state.completed_at),
         providers_total=state.providers_total,
         calls_completed=n,
         ghost_count=ghosts,
@@ -267,14 +325,38 @@ def _compute_summary(state: AuditState, voice_mode: str) -> AuditSummary:
         other_count=max(0, other),
         ghost_rate=gr,
         voicemail_rate=vr,
+        high_ghost_rate=high_ghost,
         complaint_eligible=ghosts > 0,
         top_providers=top,
         results=list(results),
+        error=err,
         share_path=f"/results/{state.audit_id}",
         voice_mode=voice_mode,
         loop_agent_note=state.loop_agent_note,
         rag_hits=rag,
     )
+
+
+def _results_csv_body(summary: AuditSummary) -> str:
+    buf = StringIO()
+    w = csv.writer(buf)
+    w.writerow(["npi", "provider_name", "phone", "status", "ghost_reason", "verified_at", "summary"])
+    for r in summary.results:
+        snip = (r.summary or "").replace("\n", " ").strip()
+        if len(snip) > 500:
+            snip = snip[:497] + "..."
+        w.writerow(
+            [
+                r.npi,
+                r.provider_name or "",
+                r.phone,
+                r.status,
+                r.ghost_reason or "",
+                r.verified_at or "",
+                snip,
+            ],
+        )
+    return buf.getvalue()
 
 
 @app.get("/api/health")
@@ -346,6 +428,11 @@ async def start_audit(
 ) -> dict[str, str]:
     store: AuditStore = _get_store(request)
     ws: WsHub = _get_ws(request)
+    if not body.recording_consent or not body.terms_acknowledged:
+        raise HTTPException(
+            status_code=400,
+            detail="Recording consent and terms acknowledgment are required to start an audit.",
+        )
     providers = _load_sample_providers(body.max_providers, settings)
     if not providers:
         raise HTTPException(
@@ -362,6 +449,11 @@ async def start_audit(
         zip_code=body.zip_code,
         care_needs=body.care_needs,
         email=body.email,
+        started_at=datetime.now(timezone.utc),
+        plan_type=body.plan_type,
+        member_plan_label=body.member_plan_label,
+        recording_consent=body.recording_consent,
+        terms_acknowledged=body.terms_acknowledged,
     )
     try:
         get_voice_provider(settings)
@@ -402,7 +494,7 @@ async def start_audit(
             store,
             ws,
             settings.voice_provider,
-            lambda st, vm: _compute_summary(st, vm),
+            lambda st, vm: _compute_summary(st, vm, settings),
             broadcast_summary=broadcast,
         )
         if settings.use_adk_audit
@@ -414,12 +506,21 @@ async def start_audit(
             store,
             ws,
             settings.voice_provider,
-            lambda st, vm: _compute_summary(st, vm),
+            lambda st, vm: _compute_summary(st, vm, settings),
             broadcast_summary=broadcast,
         )
     )
     asyncio.create_task(runner_coro)
     return {"audit_id": audit_id}
+
+
+@app.get("/api/providers-preview", dependencies=[Depends(_require_demo_key)])
+async def providers_preview(
+    max_providers: int | None = Query(default=None, ge=1, le=500),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, int | None]:
+    providers = _load_sample_providers(max_providers, settings)
+    return {"count": len(providers), "max_providers": max_providers}
 
 
 @app.get("/api/status/{audit_id}", dependencies=[Depends(_require_demo_key)])
@@ -445,7 +546,8 @@ async def get_summary(
     state = await store.load(audit_id)
     if not state:
         raise HTTPException(status_code=404, detail="Unknown audit_id")
-    return _compute_summary(state, settings.voice_provider)
+    _require_fresh_share(state, settings)
+    return _compute_summary(state, settings.voice_provider, settings)
 
 
 @app.websocket("/ws/audit/{audit_id}")
@@ -475,7 +577,8 @@ async def download_summary(
     state = await store.load(audit_id)
     if not state or state.status != "completed":
         raise HTTPException(status_code=400, detail="Audit not completed")
-    summary = _compute_summary(state, settings.voice_provider)
+    _require_fresh_share(state, settings)
+    summary = _compute_summary(state, settings.voice_provider, settings)
     pdf = build_audit_summary_pdf(state, summary)
     return Response(
         content=pdf,
@@ -494,7 +597,8 @@ async def download_complaint(
     state = await store.load(audit_id)
     if not state or state.status != "completed":
         raise HTTPException(status_code=400, detail="Audit not completed")
-    summary = _compute_summary(state, settings.voice_provider)
+    _require_fresh_share(state, settings)
+    summary = _compute_summary(state, settings.voice_provider, settings)
     if not summary.complaint_eligible:
         raise HTTPException(
             status_code=400,
@@ -505,6 +609,26 @@ async def download_complaint(
         content=docx,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f'attachment; filename="gnb-complaint-{audit_id[:8]}.docx"'},
+    )
+
+
+@app.get("/api/download/csv/{audit_id}", dependencies=[Depends(_require_demo_key)])
+async def download_results_csv(
+    audit_id: str,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    store = _get_store(request)
+    state = await store.load(audit_id)
+    if not state or state.status != "completed":
+        raise HTTPException(status_code=400, detail="Audit not completed")
+    _require_fresh_share(state, settings)
+    summary = _compute_summary(state, settings.voice_provider, settings)
+    body = _results_csv_body(summary)
+    return Response(
+        content=body,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="gnb-audit-{audit_id[:8]}.csv"'},
     )
 
 
@@ -1159,6 +1283,7 @@ async def seed_demo(request: Request, settings: Settings = Depends(get_settings)
            transcript="Agent: Hi, calling to confirm whether Brooklyn Mind Collective is accepting new Aetna patients for anxiety and trauma-focused therapy.\nReceptionist: Yes, we are! We have three therapists in-network with Aetna who specialize in anxiety and PTSD.\nAgent: Are they currently taking new patients?\nReceptionist: Two of them are — we can get someone in within two weeks.",
            summary="Confirmed in-network. 2 of 3 therapists accepting. Available within 2 weeks.", verified_at="2026-05-02T10:11:30Z"),
     ]
+    demo_time = datetime.now(timezone.utc)
     state = AuditState(
         audit_id="demo",
         status="completed",
@@ -1168,6 +1293,11 @@ async def seed_demo(request: Request, settings: Settings = Depends(get_settings)
         carrier="Aetna",
         zip_code="10001",
         care_needs=["Anxiety", "Trauma / PTSD"],
+        started_at=demo_time,
+        completed_at=demo_time,
+        plan_type="commercial",
+        recording_consent=True,
+        terms_acknowledged=True,
     )
     store: AuditStore = _get_store(request)
     store.cache_put(state)
