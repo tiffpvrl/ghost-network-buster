@@ -69,6 +69,14 @@ From the **repository root** (the directory that contains `pyproject.toml` and `
 bash scripts/run-web-cloudshell.sh
 ```
 
+For **real Twilio / Pipecat** on this same machine, pass **`--with-ngrok`** so the script starts **ngrok → 8000** and **exports `PUBLIC_URL`** for `uvicorn` (after one-time `ngrok config add-authtoken <token>`):
+
+```bash
+bash scripts/run-web-cloudshell.sh --with-ngrok
+```
+
+Equivalent: `GHB_WITH_NGROK=1 bash scripts/run-web-cloudshell.sh`.
+
 This installs **uv** if missing, runs `uv sync`, creates `.env` from `.env.example` when needed, installs npm deps once, then starts the API on **0.0.0.0:8000** and Vite on **0.0.0.0:5173**.
 
 In Cloud Shell, open **Web Preview → Preview on port 5173**. Demo: append **`/?demo=true`** to the preview URL.
@@ -122,8 +130,9 @@ To verify the full voice pipeline (real Twilio calls):
    TWILIO_FROM_NUMBER=+1...
    GOOGLE_CLOUD_PROJECT=...
    ```
-2. Start ngrok: `ngrok http 8000` and update `PUBLIC_URL` in `.env`
-3. `uv run uvicorn ghost_network_buster.main:app --reload --port 8000`
+   When using **`run-web-cloudshell.sh --with-ngrok`**, you can leave **`PUBLIC_URL`** unset in `.env`; the script exports it for that session.
+2. Either run **`bash scripts/run-web-cloudshell.sh --with-ngrok`** (sets `PUBLIC_URL` from ngrok for that session), **or** start ngrok yourself: `ngrok http 8000` and set **`PUBLIC_URL`** in `.env` to the HTTPS forwarding URL.
+3. If you are **not** using the Cloud Shell script, run: `uv run uvicorn ghost_network_buster.main:app --reload --host 0.0.0.0 --port 8000`
 4. `POST /api/start-audit` with `max_providers: 1`
 
 **Expected logs on answer:** `twilio_audio_ws:deepgram_init` → `AudioDebugLogger: first audio chunk`.
