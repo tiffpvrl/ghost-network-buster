@@ -77,7 +77,9 @@ bash scripts/run-web-cloudshell.sh --with-ngrok
 
 Equivalent: `GHB_WITH_NGROK=1 bash scripts/run-web-cloudshell.sh`.
 
-This installs **uv** if missing, runs `uv sync`, creates `.env` from `.env.example` when needed, installs npm deps once, then starts the API on **0.0.0.0:8000** and Vite on **0.0.0.0:5173**.
+This installs **uv** if missing, runs **`uv sync`** — and **`uv sync --extra pipecat`** when **`VOICE_PROVIDER=pipecat`** in **`.env`** (or in the process environment) so the live voice stack is installed — creates **`.env`** from **`.env.example`** when missing, installs npm deps once, then starts the API on **0.0.0.0:8000** and Vite on **0.0.0.0:5173**.
+
+If **`VOICE_PROVIDER=pipecat`**, expect a **larger** install (Silero, Deepgram client, etc.); on tiny disks combine with cache pruning above or use **`VOICE_PROVIDER=mock`** until you need real calls.
 
 In Cloud Shell, open **Web Preview → Preview on port 5173**. Demo: append **`/?demo=true`** to the preview URL.
 

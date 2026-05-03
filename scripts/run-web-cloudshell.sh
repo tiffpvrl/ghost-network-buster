@@ -47,9 +47,45 @@ if [[ "${CLOUD_SHELL:-}" == "true" ]]; then
   rm -rf "${HOME}/.cache/pip" 2>/dev/null || true
 fi
 
-echo "Syncing Python dependencies…"
+# Need .env before sync so we can honor VOICE_PROVIDER=pipecat (optional extra in pyproject).
+if [[ ! -f .env ]]; then
+  cp .env.example .env
+  echo "Created .env from .env.example (edit VOICE_PROVIDER, Twilio, etc. as needed)."
+fi
+
+_wants_pipecat() {
+  python3 - <<'PY' 2>/dev/null
+import os, re
+from pathlib import Path
+
+def norm_val(s: str) -> str:
+    s = s.split("#", 1)[0].strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
+        s = s[1:-1]
+    return s.strip().lower()
+
+if norm_val(os.environ.get("VOICE_PROVIDER", "")) == "pipecat":
+    raise SystemExit(0)
+p = Path(".env")
+if p.is_file():
+    for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
+        m = re.match(r"^\s*VOICE_PROVIDER\s*=\s*(.*)$", line, re.I)
+        if m and norm_val(m.group(1)) == "pipecat":
+            raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+SYNC_ARGS=()
+if _wants_pipecat; then
+  SYNC_ARGS=(--extra pipecat)
+  echo "VOICE_PROVIDER=pipecat: running uv sync --extra pipecat (larger install)…"
+else
+  echo "Syncing Python dependencies…"
+fi
+
 set +e
-uv sync
+uv sync "${SYNC_ARGS[@]}"
 _uv_ec=$?
 set -e
 if [[ "${_uv_ec}" -ne 0 ]]; then
@@ -59,11 +95,6 @@ if [[ "${_uv_ec}" -ne 0 ]]; then
   echo "  # optional: docker system prune -af" >&2
   echo "  df -h ~" >&2
   exit "${_uv_ec}"
-fi
-
-if [[ ! -f .env ]]; then
-  cp .env.example .env
-  echo "Created .env from .env.example (VOICE_PROVIDER=mock is fine for the UI)."
 fi
 
 if ! command -v npm >/dev/null 2>&1; then
