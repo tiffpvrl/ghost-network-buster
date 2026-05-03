@@ -201,19 +201,19 @@ def build_audit_agent_blueprint() -> BaseAgent:
     )
     classifier = LlmAgent(
         name="classifier_agent",
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         description="Map transcript + telephony outcome to ghost/real/voicemail classification.",
         instruction=_CLASSIFIER_INSTRUCTION,
     )
     rag = LlmAgent(
         name="complaint_rag_agent",
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         description="Synthesize statutory / regulatory snippets into complaint bullet points.",
         instruction=_RAG_INSTRUCTION,
     )
     synthesizer = LlmAgent(
         name="synthesizer_agent",
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         description="Draft the Statement of Fact body for a regulatory complaint letter.",
         instruction=_SYNTHESIZER_INSTRUCTION,
     )

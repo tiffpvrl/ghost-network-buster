@@ -86,7 +86,7 @@ def _llm_classify(
             transcript=transcript,
         )
         resp = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=prompt,
         )
         raw = (resp.text or "").strip()
