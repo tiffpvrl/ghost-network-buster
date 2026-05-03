@@ -61,6 +61,18 @@ npm run dev
 
 Open **http://localhost:5173** — Vite proxies `/api` and `/ws` to port 8000.
 
+### GCP Cloud Shell (single command)
+
+From the **repository root** (the directory that contains `pyproject.toml` and `frontend/`):
+
+```bash
+bash scripts/run-web-cloudshell.sh
+```
+
+This installs **uv** if missing, runs `uv sync`, creates `.env` from `.env.example` when needed, installs npm deps once, then starts the API on **0.0.0.0:8000** and Vite on **0.0.0.0:5173**.
+
+In Cloud Shell, open **Web Preview → Preview on port 5173**. Demo: append **`/?demo=true`** to the preview URL.
+
 ---
 
 ## Demo mode (no calls placed)
