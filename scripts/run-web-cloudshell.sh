@@ -103,9 +103,13 @@ if ! command -v npm >/dev/null 2>&1; then
 fi
 
 cd "${ROOT}/frontend"
-if [[ ! -d node_modules ]]; then
-  echo "Installing frontend dependencies…"
-  npm install
+# Install when node_modules is missing OR lock/package changed since last install.
+# (Otherwise a stale node_modules after `git pull` misses new deps — e.g. jspdf.)
+if [[ ! -d node_modules ]] \
+  || [[ package.json -nt node_modules ]] \
+  || { [[ -f package-lock.json ]] && [[ package-lock.json -nt node_modules ]]; }; then
+  echo "Installing / updating frontend dependencies…"
+  npm install --no-audit --no-fund
 fi
 cd "${ROOT}"
 
