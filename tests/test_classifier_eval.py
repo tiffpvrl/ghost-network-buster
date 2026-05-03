@@ -18,6 +18,8 @@ import json
 import os
 from pathlib import Path
 
+import asyncio
+
 import pytest
 
 # Load .env so tests work without manually exporting env vars in the shell
@@ -27,7 +29,7 @@ try:
 except ImportError:
     pass
 
-from ghost_network_buster.agents.classifier import classify_transcript
+from ghost_network_buster.agents.classifier import ac_classify_transcript
 
 _GCP_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT")
 
@@ -56,10 +58,12 @@ def test_classifier_matches_expected(scenario: dict) -> None:
     expected_ghost_reason = expected.get("ghost_reason")
     carrier = scenario.get("carrier", "Aetna")
 
-    status, ghost_reason, _ = classify_transcript(
-        scenario["transcript"],
-        carrier_hint=carrier,
-        gcp_project=_GCP_PROJECT,
+    status, ghost_reason, _ = asyncio.run(
+        ac_classify_transcript(
+            scenario["transcript"],
+            carrier_hint=carrier,
+            gcp_project=_GCP_PROJECT,
+        )
     )
 
     assert status == expected_status, (

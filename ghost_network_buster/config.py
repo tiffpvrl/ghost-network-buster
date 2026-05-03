@@ -83,6 +83,14 @@ class Settings(BaseSettings):
     # Provider directory JSON (relative to repo root unless absolute)
     providers_data_file: str = "data/providers_sample.json"
 
+    # When True, POST /api/start-audit runs the Google ADK root agent (directory → voice →
+    # classify → RAG → synthesizer). When False, uses the legacy asyncio pipeline only.
+    use_adk_audit: bool = False
+
+    # If True and VOICE_PROVIDER=pipecat, the ADK graph re-runs ac_classify_transcript on each
+    # result after calls (extra Vertex cost). Default False: trust inline Pipecat classification.
+    adk_reclassify_after_pipecat: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

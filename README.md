@@ -10,8 +10,8 @@ Built as a Columbia University Agentic AI capstone (May 2026).
 
 | Concept | Implementation |
 |---------|---------------|
-| **Agent framework (Google ADK)** | `ghost_network_buster/adk_blueprint.py` — `SequentialAgent` orchestrates the full audit; `ParallelAgent` fans out provider calls; `LlmAgent` nodes for classifier, RAG retrieval, and complaint synthesis. Introspect the live tree: `GET /api/agents/graph` |
-| **Multi-agent orchestration** | Same file: directory loader → parallel callers → hybrid classifier → RAG retrieval → complaint synthesizer. Each node is an independently testable ADK agent. |
+| **Agent framework (Google ADK)** | `ghost_network_buster/adk_blueprint.py` + `pipeline/adk_audit.py` — `SequentialAgent` runs directory load → bounded-parallel voice calls → optional graph classify → corpus retrieve → `LlmAgent` RAG bullets + letter body. Introspect: `GET /api/agents/graph`. Production path is selected with **`USE_ADK_AUDIT`** (default: legacy `pipeline/run_audit.py` only). |
+| **Multi-agent orchestration** | **ADK mode** (`USE_ADK_AUDIT=true`): `run_audit_with_adk()` drives a `Runner` and maps ADK events to **`WsHub`** (`type: adk_event`) while keeping **`summary`** broadcasts. **Legacy mode**: FastAPI `asyncio` + `run_audit_pipeline` only — no ADK Runner for the audit tail. |
 | **Tool use** | `tools/voice_provider.py` (Twilio outbound calls), `tools/rag.py` (regulatory corpus retrieval), `tools/memory_tool.py` (per-NPI result memory) |
 | **Hybrid classifier** | `agents/classifier.py` — keyword fast-path for high-confidence signals (disconnected, voicemail) with Gemini Flash LLM fallback for all other cases. 8 ghost reason categories. |
 | **RAG** | `tools/rag.py` — local TF-IDF over bundled regulatory corpus (`data/regulatory_corpus/`): NY ISC §3217-a/§4324, MHPAEA, NSA. RAG hits injected into complaint letters and returned in `AuditSummary.rag_hits`. |
@@ -147,15 +147,15 @@ If Deepgram returns HTTP 400: check `DEEPGRAM_STT_MODEL` (use `nova-3-general` o
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/start-audit` | Start an audit. Body: `carrier`, `zip_code`, `care_needs`, optional `max_providers`, `override_cost_guard` |
+| `POST` | `/api/start-audit` | Start an audit. Set **`USE_ADK_AUDIT=true`** (`.env`) to run the full ADK graph; default uses the legacy voice-only pipeline. |
 | `GET` | `/api/summary/{id}` | Current audit summary including `rag_hits` when completed |
 | `GET` | `/api/status/{id}` | Raw `AuditState` |
-| `WS` | `/ws/audit/{id}` | Live push: `{type:"summary", data:...}` after each call |
+| `WS` | `/ws/audit/{id}` | Live push: `{type:"summary", data:...}` after each call; with ADK audits also `{type:"adk_event", ...}` trace events |
 | `GET` | `/api/download/summary/{id}` | PDF audit report |
 | `GET` | `/api/download/complaint/{id}` | DOCX regulatory complaint (requires ghost rate > 0) |
 | `POST` | `/api/seed-demo` | Seed the fixed demo audit state — called automatically at startup |
 | `GET` | `/api/agents/graph` | ADK agent tree as JSON |
-| `POST` | `/api/agents/classify` | Run the ADK classifier agent on a transcript |
+| `POST` | `/api/agents/classify` | **Deprecated (debug):** same path as `ac_classify_transcript` / live audits |
 | `GET` | `/api/health` | Health check |
 
 ---

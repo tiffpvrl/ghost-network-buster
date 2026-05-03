@@ -37,7 +37,10 @@ async def run_audit_pipeline(
     voice_mode: str,
     summary_builder: Callable[[AuditState, str], Any],
     broadcast_summary: Callable[[Any], Awaitable[None]] | None = None,
+    *,
+    mark_completed: bool = True,
 ) -> None:
+    """Run voice verification. When mark_completed is False (ADK orchestration), leave status as running."""
     state = await store.load(audit_id)
     if not state:
         logger.error("Missing audit %s", audit_id)
@@ -101,12 +104,18 @@ async def run_audit_pipeline(
             state.loop_agent_note = (state.loop_agent_note or "").strip() + extra
             await push()
 
-        state.status = "completed"
-        logger.info(
-            "Audit %s completed — %d calls, ghost_rate=%.1f%%, complaint_eligible=%s",
-            audit_id, len(state.results), _ghost_rate(state) * 100,
-            _ghost_rate(state) >= 0.70,
-        )
+        if mark_completed:
+            state.status = "completed"
+            logger.info(
+                "Audit %s completed — %d calls, ghost_rate=%.1f%%, complaint_eligible=%s",
+                audit_id, len(state.results), _ghost_rate(state) * 100,
+                _ghost_rate(state) >= 0.70,
+            )
+        else:
+            logger.info(
+                "Audit %s voice phase finished (awaiting ADK tail) — %d calls, ghost_rate=%.1f%%",
+                audit_id, len(state.results), _ghost_rate(state) * 100,
+            )
         await push()
     except Exception as e:  # noqa: BLE001
         logger.exception("Audit pipeline failed for audit_id=%s", audit_id)

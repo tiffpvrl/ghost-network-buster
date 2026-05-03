@@ -26,11 +26,12 @@ from pydantic import BaseModel, Field
 from ghost_network_buster.adk_blueprint import agent_tree_to_dict, build_audit_agent_blueprint
 from ghost_network_buster.config import Settings, get_settings
 from ghost_network_buster.models import AuditState, AuditSummary, Provider
+from ghost_network_buster.pipeline.adk_audit import run_audit_with_adk
 from ghost_network_buster.pipeline.run_audit import run_audit_pipeline
 from ghost_network_buster.reports import build_audit_summary_pdf, build_complaint_draft_docx
+from ghost_network_buster.services.audit_rag import rag_hits_for_audit_state
 from ghost_network_buster.services.audit_store import AuditStore
 from ghost_network_buster.services.ws_hub import WsHub
-from ghost_network_buster.tools.rag import retrieve
 from ghost_network_buster.tools.voice_provider import (
     VoiceConfigurationError,
     get_voice_provider,
@@ -157,8 +158,14 @@ async def _seed_demo_state(store: AuditStore) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import os  # noqa: PLC0415
+
     settings = get_settings()
     app.state.settings = settings
+    if settings.google_cloud_project:
+        os.environ.setdefault("GOOGLE_CLOUD_PROJECT", settings.google_cloud_project)
+        os.environ.setdefault("GOOGLE_CLOUD_LOCATION", settings.vertex_location)
+        os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "true")
     store = AuditStore(settings)
     app.state.store = store
     app.state.ws = WsHub()
@@ -231,31 +238,7 @@ def _load_sample_providers(limit: int | None, settings: Settings | None = None) 
 
 
 def _rag_hits_for_state(state: AuditState) -> list[dict[str, object]]:
-    if state.status != "completed":
-        return []
-    n = len(state.results) or 1
-    ghosts = sum(1 for r in state.results if r.status == "ghost")
-    gr = ghosts / n
-    q = (
-        f"mental health network directory accuracy inadequate ghost providers "
-        f"insurance {state.carrier} zip {state.zip_code} ghost rate {gr:.0%} "
-        f"MHPAEA parity NSA directory verification "
-        f"NY Insurance Law 3217-a 4324 network adequacy DFS complaint"
-    )
-    hits = retrieve(q, top_k=4)
-    rows: list[dict[str, object]] = []
-    for h in hits:
-        row: dict[str, object] = {
-            "source": h["source"],
-            "excerpt": h["excerpt"],
-            "score": round(h["score"], 4),
-        }
-        if h.get("doc_type"):
-            row["doc_type"] = h["doc_type"]
-        if h.get("jurisdiction"):
-            row["jurisdiction"] = h["jurisdiction"]
-        rows.append(row)
-    return rows
+    return rag_hits_for_audit_state(state, require_completed=True)
 
 
 def _compute_summary(state: AuditState, voice_mode: str) -> AuditSummary:
@@ -327,38 +310,32 @@ class ClassifyRequest(BaseModel):
     carrier: str = "Aetna"
 
 
-@app.post("/api/agents/classify", dependencies=[Depends(_require_demo_key)])
+@app.post("/api/agents/classify", dependencies=[Depends(_require_demo_key)], deprecated=True)
 async def agents_classify(
     body: ClassifyRequest,
+    response: Response,
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
-    """Run the ADK classifier agent on a transcript via the ADK Runner."""
-    import json as _json
-    import re as _re
-
-    from ghost_network_buster.adk_blueprint import run_agent_async
+    """Debug endpoint: same classification path as Pipecat (ac_classify_transcript). Prefer observing live audits."""
+    response.headers["Deprecation"] = "true"
+    response.headers["Warning"] = (
+        '299 - "classify is a debug endpoint; production uses ac_classify_transcript in the audit graph"'
+    )
+    from ghost_network_buster.agents.classifier import ac_classify_transcript  # noqa: PLC0415
 
     if not settings.google_cloud_project:
         raise HTTPException(status_code=503, detail="GOOGLE_CLOUD_PROJECT not configured")
 
-    blueprint = build_audit_agent_blueprint()
-    classifier = next(a for a in blueprint.sub_agents if a.name == "classifier_agent")
-
-    message = _json.dumps({"transcript": body.transcript, "carrier": body.carrier})
-    raw = await run_agent_async(
-        classifier,
-        message,
-        project=settings.google_cloud_project,
-        location=settings.vertex_location,
+    status, ghost_reason, summary = await ac_classify_transcript(
+        body.transcript,
+        carrier_hint=body.carrier,
+        gcp_project=settings.google_cloud_project,
+        vertex_location=settings.vertex_location,
     )
-
-    try:
-        cleaned = _re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=_re.MULTILINE).strip()
-        result: Any = _json.loads(cleaned)
-    except Exception:
-        result = {"raw": raw}
-
-    return {"adk_result": result, "agent": "classifier_agent"}
+    return {
+        "adk_result": {"status": status, "ghost_reason": ghost_reason, "summary": summary},
+        "agent": "classifier_agent",
+    }
 
 
 @app.post("/api/start-audit", dependencies=[Depends(_require_demo_key)])
@@ -416,8 +393,20 @@ async def start_audit(
     async def broadcast(summ: AuditSummary) -> None:
         await ws.broadcast_summary(audit_id, summ)
 
-    asyncio.create_task(
-        run_audit_pipeline(
+    runner_coro = (
+        run_audit_with_adk(
+            audit_id,
+            body.carrier,
+            providers,
+            settings,
+            store,
+            ws,
+            settings.voice_provider,
+            lambda st, vm: _compute_summary(st, vm),
+            broadcast_summary=broadcast,
+        )
+        if settings.use_adk_audit
+        else run_audit_pipeline(
             audit_id,
             body.carrier,
             providers,
@@ -429,6 +418,7 @@ async def start_audit(
             broadcast_summary=broadcast,
         )
     )
+    asyncio.create_task(runner_coro)
     return {"audit_id": audit_id}
 
 
@@ -551,7 +541,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
     """
     from datetime import datetime, timezone  # noqa: PLC0415
 
-    from ghost_network_buster.agents.classifier import classify_transcript  # noqa: PLC0415
+    from ghost_network_buster.agents.classifier import ac_classify_transcript  # noqa: PLC0415
     from ghost_network_buster.models import CallResult  # noqa: PLC0415
     from ghost_network_buster.services.stt_interim_commit import SttInterimCommitProcessor  # noqa: PLC0415
     from ghost_network_buster.tools.pipecat_provider import _CALL_META, _PENDING_CALLS  # noqa: PLC0415
@@ -1080,7 +1070,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
         npi = provider.npi if provider else call_id
         phone = provider.phone if provider else ""
         specialty = provider.specialty if provider else None
-        status, ghost_reason, summary_text = classify_transcript(
+        status, ghost_reason, summary_text = await ac_classify_transcript(
             full_transcript,
             carrier_hint=carrier_hint,
             gcp_project=settings.google_cloud_project,

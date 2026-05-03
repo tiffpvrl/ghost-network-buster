@@ -42,6 +42,9 @@ class AuditState(BaseModel):
     care_needs: list[str] = Field(default_factory=list)
     email: str | None = None
     loop_agent_note: str | None = None
+    # Populated by ADK audit graph (RAG + synthesizer LlmAgents) for complaint alignment
+    adk_regulatory_bullets: str | None = None
+    adk_letter_body: str | None = None
 
 
 class AuditSummary(BaseModel):
