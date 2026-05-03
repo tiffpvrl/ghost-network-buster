@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     # Deepgram TTS (Twilio output is resampled to 8 kHz µ-law in the serializer)
     deepgram_tts_voice: str = "aura-2-helena-en"
     deepgram_tts_sample_rate: int = Field(default=24000, ge=8000, le=48000)
+    # sentence = fewer, larger TTS chunks (smoother on phones); token = lowest latency between chunks
+    deepgram_tts_text_aggregation: Literal["sentence", "token"] = "sentence"
+
+    # After VAD stop, if Deepgram never emits a final (common on very short utterances), promote the
+    # last interim transcript to a synthetic TranscriptionFrame after this delay.
+    voice_stt_interim_commit_enabled: bool = True
+    voice_stt_interim_commit_delay_ms: int = Field(default=450, ge=0, le=3000)
+    voice_stt_interim_commit_min_chars: int = Field(default=2, ge=1, le=32)
     # Cost guard: pipecat audits with more providers than this are rejected unless
     # the request includes "override_cost_guard": true. Set to 0 to disable.
     pipecat_cost_guard: int = Field(default=5, ge=0)

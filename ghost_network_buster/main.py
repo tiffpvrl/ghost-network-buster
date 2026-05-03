@@ -546,13 +546,14 @@ async def twilio_answer(call_id: str, settings: Settings = Depends(get_settings)
 @app.websocket("/ws/twilio-audio/{call_id}")
 async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
     """
-    Pipecat pipeline: Twilio audio stream → Deepgram STT → Gemini LLM → Deepgram TTS → audio back.
+    Pipecat pipeline: Twilio audio stream → Deepgram STT → interim commit → Gemini LLM → Deepgram TTS → audio back.
     Resolves the pending Future in pipecat_provider when the call ends.
     """
     from datetime import datetime, timezone  # noqa: PLC0415
 
     from ghost_network_buster.agents.classifier import classify_transcript  # noqa: PLC0415
     from ghost_network_buster.models import CallResult  # noqa: PLC0415
+    from ghost_network_buster.services.stt_interim_commit import SttInterimCommitProcessor  # noqa: PLC0415
     from ghost_network_buster.tools.pipecat_provider import _CALL_META, _PENDING_CALLS  # noqa: PLC0415
 
     await websocket.accept()
@@ -858,12 +859,22 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                 endpointing=endpointing_opt,
             ),
         )
+        stt_commit = SttInterimCommitProcessor(
+            commit_delay_ms=settings.voice_stt_interim_commit_delay_ms,
+            min_chars=settings.voice_stt_interim_commit_min_chars,
+            enabled=settings.voice_stt_interim_commit_enabled,
+        )
         llm = _VertexLLMProcessor()
+        tts_agg = (
+            TextAggregationMode.SENTENCE
+            if settings.deepgram_tts_text_aggregation == "sentence"
+            else TextAggregationMode.TOKEN
+        )
         tts = DeepgramTTSService(
             api_key=settings.deepgram_api_key or "",
             voice=settings.deepgram_tts_voice,
             sample_rate=settings.deepgram_tts_sample_rate,
-            text_aggregation_mode=TextAggregationMode.TOKEN,
+            text_aggregation_mode=tts_agg,
         )
         _agent_debug_log(
             "twilio_audio_ws:deepgram_init",
@@ -874,6 +885,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                 "stt_sample_rate": settings.deepgram_stt_sample_rate,
                 "tts_voice": settings.deepgram_tts_voice,
                 "tts_sample_rate": settings.deepgram_tts_sample_rate,
+                "tts_text_aggregation": settings.deepgram_tts_text_aggregation,
             },
             hypothesis_id="H_deepgram",
         )
@@ -915,6 +927,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                 transport.input(),
                 vad,
                 stt,
+                stt_commit,
                 llm,
                 capture,
                 tts,
