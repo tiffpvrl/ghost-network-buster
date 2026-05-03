@@ -1,0 +1,81 @@
+[
+  {
+    "npi": "1730000001",
+    "name": "Hudson Mind Collective",
+    "phone": "+12125550101",
+    "specialty": "Anxiety, Trauma"
+  },
+  {
+    "npi": "1730000002",
+    "name": "Dr. Sarah Chen, LCSW",
+    "phone": "+12125550102",
+    "specialty": "CBT, Depression",
+    "mock_outcome": "ghost_disconnected"
+  },
+  {
+    "npi": "1730000003",
+    "name": "Park Slope Therapy Partners",
+    "phone": "+17185550103",
+    "specialty": "Couples & Family"
+  },
+  {
+    "npi": "1730000004",
+    "name": "Dr. Marcus Webb, PsyD",
+    "phone": "+12125550104",
+    "specialty": "Trauma-Informed CBT",
+    "mock_outcome": "ghost_wrong_network"
+  },
+  {
+    "npi": "1730000005",
+    "name": "East Side Wellness Center",
+    "phone": "+12125550105",
+    "specialty": "Adult ADHD",
+    "mock_outcome": "ghost_not_accepting_patients"
+  },
+  {
+    "npi": "1730000006",
+    "name": "Dr. Linda Okafor, MD",
+    "phone": "+17185550106",
+    "specialty": "Anxiety, PTSD"
+  },
+  {
+    "npi": "1730000007",
+    "name": "Riverside Counseling Group",
+    "phone": "+12125550107",
+    "specialty": "General Therapy",
+    "mock_outcome": "ghost_no_behavioral_health"
+  },
+  {
+    "npi": "1730000008",
+    "name": "Dr. Priya Patel, LMFT",
+    "phone": "+12125550108",
+    "specialty": "Spanish-speaking, Anxiety",
+    "mock_outcome": "real"
+  },
+  {
+    "npi": "1730000009",
+    "name": "Brooklyn Mind Collective",
+    "phone": "+17185550109",
+    "specialty": "LGBTQ+ Affirming"
+  },
+  {
+    "npi": "1730000010",
+    "name": "Dr. James Ostrowski, PhD",
+    "phone": "+12125550110",
+    "specialty": "Behavioral Health",
+    "mock_outcome": "ghost_retired"
+  },
+  {
+    "npi": "1730000011",
+    "name": "Greenpoint Wellness Center",
+    "phone": "+17185550111",
+    "specialty": "CBT, Anxiety",
+    "mock_outcome": "voicemail"
+  },
+  {
+    "npi": "1730000012",
+    "name": "Dr. Imani Adeyemi, LMHC",
+    "phone": "+12125550112",
+    "specialty": "Grief, Trauma"
+  }
+]

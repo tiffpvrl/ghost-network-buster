@@ -74,6 +74,10 @@ def test_run_audit_pipeline_mark_completed_false(tmp_path) -> None:
         memory_local_dir=None,
         gcs_audits_bucket=None,
         gcs_memory_bucket=None,
+        # MockVoiceProvider defaults to 6–9s per call (deploy-safe pacing).
+        # Drop to zero so the test stays a few hundred milliseconds.
+        mock_voice_delay_min_s=0.0,
+        mock_voice_delay_max_s=0.0,
     )
     store = AuditStore(settings)
     audit_id = "flag-audit"

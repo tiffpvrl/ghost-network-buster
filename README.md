@@ -100,6 +100,39 @@ The demo requires the backend to be running (for downloads), but places zero Twi
 
 ---
 
+## Deployed simulation (default — no Twilio)
+
+For a publicly shared URL (Cloud Run, ngrok, Cloud Shell preview, etc.) the patient pipeline must not place real phone calls. The repo's `.env.example` is configured for this by default:
+
+```env
+VOICE_PROVIDER=mock
+PROVIDERS_DATA_FILE=data/providers_sim.json
+MOCK_VOICE_DELAY_MIN_S=6
+MOCK_VOICE_DELAY_MAX_S=9
+MOCK_VOICE_REAL_SHARE=0.35
+MAX_PARALLEL_CALLS=1
+```
+
+What this gives you:
+
+- `MockVoiceProvider` (in `ghost_network_buster/tools/voice_provider.py`) fabricates `CallResult`s entirely server-side — no Twilio, no Pipecat, no outbound HTTP — at 6–9 s per call.
+- 12 NY-themed synthetic providers in `data/providers_sim.json` with masked `212`/`718` 555-XXXX phone numbers; the provider's phone is **never** echoed into the transcript or the dashboard, even if a fixture leaks a real number.
+- Outcome variety covers all 7 ghost reasons the frontend has labels for (`disconnected`, `wrong_network`, `not_accepting_patients`, `no_behavioral_health`, `retired`, `wrong_provider`) plus `voicemail` and `real`, so the dashboard's ghost-reason breakdown chart looks like a real audit.
+- The full RAG + ADK paralegal complaint-letter path runs unchanged (state.results is shape-identical), so `/api/download/complaint/<id>` still produces a real DOCX with citations.
+
+Total wall-clock for a default 12-provider audit at `MAX_PARALLEL_CALLS=1`: roughly 60–100 s, matching the patient-form copy "~90 seconds for a typical sample".
+
+To **place real calls** locally (developer machine only), uncomment the override block at the bottom of `.env`:
+
+```env
+VOICE_PROVIDER=pipecat
+PROVIDERS_DATA_FILE=data/providers_test.json
+```
+
+…and supply Twilio + Deepgram credentials. The cost guard `PIPECAT_COST_GUARD=5` will stop you from accidentally fanning out a large fixture.
+
+---
+
 ## Running tests
 
 ```bash

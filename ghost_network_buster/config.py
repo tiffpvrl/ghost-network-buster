@@ -80,6 +80,17 @@ class Settings(BaseSettings):
     loop_reverify_voicemail: bool = True
     loop_ghost_rate_threshold: float = Field(default=0.9, ge=0.0, le=1.0)
 
+    # MockVoiceProvider pacing — controls the simulated patient-side audit on the
+    # deployed URL. Defaults are intentionally slow (6–9 s per call with
+    # MAX_PARALLEL_CALLS=1 produces a ~60–100 s end-to-end audit, matching the UI
+    # copy "~90 seconds for a typical sample"). Lower these to speed up tests.
+    mock_voice_delay_min_s: float = Field(default=6.0, ge=0.0, le=60.0)
+    mock_voice_delay_max_s: float = Field(default=9.0, ge=0.0, le=60.0)
+    # Probability of a non-ghost ("real") outcome when a fixture row does not
+    # specify mock_outcome. Mirrors the employer simulator's GHOST_SHARE so the
+    # patient demo tells the same story as the HR aggregate view.
+    mock_voice_real_share: float = Field(default=0.35, ge=0.0, le=1.0)
+
     # Provider directory JSON (relative to repo root unless absolute)
     providers_data_file: str = "data/providers_sample.json"
 

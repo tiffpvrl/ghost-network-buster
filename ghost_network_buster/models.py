@@ -9,10 +9,22 @@ class Provider(BaseModel):
     name: str
     phone: str
     specialty: str | None = None
-    # When VOICE_PROVIDER=mock, drives fake transcript/outcome (optional).
-    mock_outcome: Literal["real", "ghost_disconnected", "ghost_wrong_network", "voicemail"] | None = (
-        None
-    )
+    # When VOICE_PROVIDER=mock, drives the fake transcript/outcome (optional).
+    # When omitted, MockVoiceProvider draws an outcome at random using the
+    # mock_voice_real_share setting.
+    mock_outcome: (
+        Literal[
+            "real",
+            "ghost_disconnected",
+            "ghost_wrong_network",
+            "ghost_not_accepting_patients",
+            "ghost_no_behavioral_health",
+            "ghost_retired",
+            "ghost_wrong_provider",
+            "voicemail",
+        ]
+        | None
+    ) = None
 
 
 class CallResult(BaseModel):
