@@ -427,6 +427,38 @@ const DICT: Record<Locale, Record<string, string>> = {
     employerHealthGapsEmpty: "No ZIP-level gaps yet — all audited ZIPs returned at least one real listing.",
     employerHealthGapRow: "{real} real · {ghost} ghost · {audits} audit(s)",
 
+    // ── Renewal negotiation packet page ───────────────────────
+    employerRenewalPacketTitle: "Carrier Renewal Negotiation Packet",
+    employerRenewalPacketEyebrow: "Renewal negotiation",
+    employerRenewalPacketBody:
+      "Generate a professional, HR-facing renewal packet from your audit history. Fill in the renewal details below — the packet pulls from your existing audit data automatically.",
+    employerRenewalPacketCta: "Generate Renewal Packet (PDF)",
+    employerRenewalPacketNoData:
+      "Run a batch audit first to populate the packet.",
+    employerRenewalFormTitle: "Renewal & Employer Details",
+    employerRenewalFormHelp:
+      "Used in the packet header, executive summary, contract language, and final position. Placeholders are fine — counsel will redline before submission.",
+    employerRenewalFieldEmployer: "Employer name",
+    employerRenewalFieldCarrier: "Carrier name",
+    employerRenewalFieldPlan: "Plan name or type",
+    employerRenewalFieldYear: "Renewal year",
+    employerRenewalFieldPeriodStart: "Audit period start",
+    employerRenewalFieldPeriodEnd: "Audit period end",
+    employerRenewalFieldMarkets: "Employee markets reviewed",
+    employerRenewalFieldEmployees: "Covered employees",
+    employerRenewalFieldIncrease: "Proposed renewal increase ($)",
+    employerRenewalFieldSpend: "Annual plan spend ($, optional)",
+    employerRenewalFieldThreshold: "Ghost-rate threshold for contract language (%)",
+    employerRenewalFieldGoals: "Renewal goals (optional)",
+    employerRenewalPreviewExec: "Preview: Executive Renewal Summary",
+    employerRenewalPreviewMetrics: "Preview: Key Audit Metrics",
+    employerRenewalPreviewAsks: "Preview: Recommended Carrier Requests",
+    employerRenewalPreviewMarkets: "Preview: Evidence Summary by Market",
+    employerRenewalPreviewFinancial: "Preview: Financial Impact Estimate",
+    employerRenewalPreviewFinal: "Preview: Final Renewal Position",
+    employerRenewalPreviewAppendix: "Preview: Provider Evidence Appendix",
+    employerRenewalBack: "← Employer workspace",
+
     // ── Negotiation packet ─────────────────────────────────────
     employerPacketTitle: "Negotiation packet",
     employerPacketBody:

@@ -34,7 +34,8 @@
       "Bash(python -c ':*)",
       "Bash(/c/Users/sindh/anaconda3/python:*)",
       "Bash(python:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

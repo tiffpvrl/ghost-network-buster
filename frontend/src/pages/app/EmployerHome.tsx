@@ -280,16 +280,29 @@ export default function EmployerHome() {
       <section className="section">
         <h2 className="section__title">{t("employerPacketTitle")}</h2>
         <div className="card">
-          <p className="lede" style={{ marginBottom: "0.4rem" }}>
-            {t("employerPacketBody")}
+          {/* ── Primary: full renewal negotiation packet ──────────── */}
+          <p className="lede" style={{ marginBottom: "0.5rem" }}>
+            Generate a professional, HR-facing Carrier Renewal Negotiation
+            Packet — executive summary, negotiation asks, market evidence,
+            financial concession targets, recommended contract language, and
+            provider evidence appendix.
           </p>
+          <div className="packet-actions" style={{ marginBottom: "1.4rem" }}>
+            <Link
+              to="/app/employer/packet"
+              className="btn"
+            >
+              Build Renewal Packet →
+            </Link>
+          </div>
 
-          <h3 style={{ margin: "0.85rem 0 0", fontSize: "0.95rem" }}>
-            {t("employerReportContextTitle")}
+          {/* ── Secondary: quick standalone exports ───────────────── */}
+          <h3 style={{ margin: "0 0 0.2rem", fontSize: "0.9rem" }}>
+            Quick exports
           </h3>
           <p
             style={{
-              margin: "0.2rem 0 0",
+              margin: "0 0 0.75rem",
               fontSize: "0.78rem",
               color: "var(--muted)",
             }}
@@ -319,10 +332,10 @@ export default function EmployerHome() {
             </label>
           </div>
 
-          <div className="packet-actions">
+          <div className="packet-actions" style={{ marginTop: "0.75rem" }}>
             <button
               type="button"
-              className="btn"
+              className="btn secondary"
               onClick={handleMemo}
               disabled={!hasData}
               title={disabledTitle}

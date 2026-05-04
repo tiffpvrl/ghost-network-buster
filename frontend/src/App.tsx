@@ -14,6 +14,7 @@ import EmployerAuditDetail from "./pages/app/EmployerAuditDetail";
 import EmployerAuditNew from "./pages/app/EmployerAuditNew";
 import EmployerBatchPage from "./pages/app/EmployerBatch";
 import EmployerHome from "./pages/app/EmployerHome";
+import EmployerPacket from "./pages/app/EmployerPacket";
 import PatientHome from "./pages/app/PatientHome";
 import Checkout from "./pages/auth/Checkout";
 import Login from "./pages/auth/Login";
@@ -101,6 +102,7 @@ const APP_ROUTES = (
       <Route path="/app/employer/audits/:auditId" element={<EmployerAuditDetail />} />
       <Route path="/app/employer/results/:auditId" element={<EmployerAuditDetail />} />
       <Route path="/app/employer/batches/:batchId" element={<EmployerBatchPage />} />
+      <Route path="/app/employer/packet" element={<EmployerPacket />} />
     </Route>
   </Route>
 );
