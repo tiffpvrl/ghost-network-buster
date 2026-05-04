@@ -3,14 +3,10 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/AuthProvider";
 import {
   estimateExposureUsd,
-  flatEvidenceRows,
   loadEmployerAggregates,
   type EmployerAggregates,
 } from "../../data/employerAggregates";
 import { listByCreatedAt, type EmployerBatch } from "../../data/employerBatches";
-import { downloadFindingsMemo } from "../../lib/renewalReport";
-import { downloadExecutiveSummary } from "../../lib/executiveSummary";
-import { downloadEvidenceCsv } from "../../lib/evidenceCsv";
 import { useLocale } from "../../locale";
 
 const DEFAULT_HEADCOUNT = 500;
@@ -136,9 +132,6 @@ export default function EmployerHome() {
   const [recent] = useState<EmployerBatch[]>(() => listByCreatedAt().slice(0, 3));
   const [headcount, setHeadcount] = useState<number>(DEFAULT_HEADCOUNT);
   const [agg, setAgg] = useState<EmployerAggregates>(() => loadEmployerAggregates());
-  const [orgName, setOrgName] = useState<string>("");
-  const [benefitsLead, setBenefitsLead] = useState<string>("");
-
   // Poll aggregates while any batch is running
   useEffect(() => {
     let cancelled = false;
@@ -155,17 +148,12 @@ export default function EmployerHome() {
 
   const exposure = useMemo(() => estimateExposureUsd(agg, headcount), [agg, headcount]);
   const hasData = agg.totals.audits > 0;
-  const disabledTitle = hasData ? undefined : t("employerPacketDisabledTitle");
 
   function onHeadcountChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value.replace(/[^\d]/g, "");
     const val = raw === "" ? 0 : Math.min(1_000_000, parseInt(raw, 10));
     setHeadcount(val);
   }
-
-  function handleMemo() { if (hasData) downloadFindingsMemo(agg, { headcount, orgName: orgName.trim() || undefined, benefitsLead: benefitsLead.trim() || undefined }); }
-  function handleExec() { if (hasData) downloadExecutiveSummary(agg, { headcount, orgName: orgName.trim() || undefined }); }
-  function handleCsv()  { if (hasData) downloadEvidenceCsv(flatEvidenceRows()); }
 
   const ghostPctDisplay = (agg.totals.ghostRate * 100).toFixed(1);
 
@@ -420,90 +408,6 @@ export default function EmployerHome() {
         </div>
       </div>
 
-      {/* ── Quick exports ────────────────────────────────────────────── */}
-      <div className="eh-section-heading">
-        <div>
-          <h2>Quick exports</h2>
-          <div className="sub">Used in the memorandum header and signature block. Counsel will redline; placeholders are fine.</div>
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="exports-grid">
-          <div className="exports-form">
-            <div className="ef-field">
-              <label>Organization name</label>
-              <input
-                type="text"
-                value={orgName}
-                onChange={(e) => setOrgName(e.target.value)}
-                placeholder={t("employerReportContextOrgPlaceholder")}
-                maxLength={120}
-              />
-            </div>
-            <div className="ef-field">
-              <label>Benefits lead</label>
-              <input
-                type="text"
-                value={benefitsLead}
-                onChange={(e) => setBenefitsLead(e.target.value)}
-                placeholder={t("employerReportContextLeadPlaceholder")}
-                maxLength={120}
-              />
-            </div>
-          </div>
-
-          <div className="exports-list">
-            <div
-              className="export-item"
-              role="button"
-              aria-disabled={!hasData}
-              title={disabledTitle}
-              onClick={handleMemo}
-              style={{ cursor: hasData ? "pointer" : "not-allowed", opacity: hasData ? 1 : 0.4 }}
-            >
-              <div className="export-icon"><IconDoc /></div>
-              <div>
-                <div className="export-name">Findings memo</div>
-                <div className="export-desc">14-page narrative summary with carrier breakdowns and remediation steps</div>
-              </div>
-              <span className="export-fmt">PDF</span>
-            </div>
-
-            <div
-              className="export-item"
-              role="button"
-              aria-disabled={!hasData}
-              title={disabledTitle}
-              onClick={handleExec}
-              style={{ cursor: hasData ? "pointer" : "not-allowed", opacity: hasData ? 1 : 0.4 }}
-            >
-              <div className="export-icon"><IconBriefcase /></div>
-              <div>
-                <div className="export-name">Executive summary</div>
-                <div className="export-desc">2-page board-ready brief with KPIs, exposure, and recommended actions</div>
-              </div>
-              <span className="export-fmt">PDF</span>
-            </div>
-
-            <div
-              className="export-item"
-              role="button"
-              aria-disabled={!hasData}
-              title={disabledTitle}
-              onClick={handleCsv}
-              style={{ cursor: hasData ? "pointer" : "not-allowed", opacity: hasData ? 1 : 0.4 }}
-            >
-              <div className="export-icon csv"><IconDownload /></div>
-              <div>
-                <div className="export-name">Provider evidence</div>
-                <div className="export-desc">Raw audit log: every call attempt, outcome, ghost reason, timestamp, and transcript ID</div>
-              </div>
-              <span className="export-fmt">CSV</span>
-            </div>
-          </div>
-        </div>
-      </div>
 
     </div>
   );

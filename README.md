@@ -82,8 +82,7 @@ The employer home (`frontend/src/pages/app/EmployerHome.tsx`) surfaces:
 - **Ghost rate by carrier** — all audited carriers ranked by ghost rate with severity-coded bars (severe ≥70%, high ≥60%)
 - **Financial exposure calculator** — live `headcount × 10% prevalence × weighted ghost rate × $4,783` estimate, editable headcount
 - **Coverage gaps by ZIP** — stacked real/ghost bar per ZIP with provider counts
-- **Carrier Renewal Negotiation Packet** — CTA card to build or view the packet
-- **Quick exports** — one-click PDF findings memo, PDF executive summary, and CSV evidence log
+- **Carrier Renewal Negotiation Packet** — CTA card to build or view the packet (includes PDF memo, executive summary, and CSV evidence)
 
 ### Carrier Renewal Negotiation Packet (`/app/employer/packet`)
 
@@ -99,16 +98,6 @@ Client-side deterministic packet generator (`frontend/src/lib/negotiationPacket.
 The packet UI (`frontend/src/pages/app/EmployerPacket.tsx`) renders a print-ready layout. The negotiation packet PDF renderer lives in `frontend/src/lib/negotiationPacketPdf.ts`.
 
 > **Note:** The ADK orchestrator wiring (`adk_blueprint.py`) is scaffolded but intentionally not connected to the packet generator. The current implementation is fully deterministic and client-side — no LLM call is made for packet generation.
-
-### Quick exports
-
-Three export functions aggregate across all batches in `localStorage`:
-
-| Export | Function | Output |
-|--------|----------|--------|
-| Findings memo | `downloadFindingsMemo()` | 14-page PDF narrative |
-| Executive summary | `downloadExecutiveSummary()` | 2-page PDF brief |
-| Provider evidence | `downloadEvidenceCsv()` | CSV of every call result |
 
 ---
 
