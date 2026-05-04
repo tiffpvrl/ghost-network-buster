@@ -241,10 +241,10 @@ const DICT: Record<Locale, Record<string, string>> = {
     checkoutCancel: "Cancel and return to workspace",
     appLogout: "Log out",
     appBuyCredits: "Buy more credits",
-    appWorkspacePatient: "Patient workspace",
+    appWorkspacePatient: "Dashboard",
     appWorkspaceEmployer: "Employer workspace",
     creditsLabel: "credits",
-    patientHomeEyebrow: "Patient workspace",
+    patientHomeEyebrow: "Dashboard",
     patientHomeGreeting: "Welcome, {email}.",
     patientHomeBody:
       "Each audit places live verification calls against a sample of your carrier’s in-network directory. One credit covers one audit run.",
