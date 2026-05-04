@@ -9,6 +9,9 @@ class Provider(BaseModel):
     name: str
     phone: str
     specialty: str | None = None
+    # Optional postal code — surfaced on results cards for realism. Not used
+    # for filtering (audits use specialty/care-need overlap only).
+    zip: str | None = None
     # When VOICE_PROVIDER=mock, drives the fake transcript/outcome (optional).
     # When omitted, MockVoiceProvider draws an outcome at random using the
     # mock_voice_real_share setting.
@@ -36,6 +39,7 @@ class CallResult(BaseModel):
     summary: str | None = None
     provider_name: str | None = None
     specialty: str | None = None
+    zip: str | None = None
     verified_at: str | None = None
     audio_note: str | None = Field(
         default=None,

@@ -263,6 +263,42 @@ def _load_sample_providers(limit: int | None, settings: Settings | None = None) 
     return providers
 
 
+# Minimum providers we want in any patient-side audit so the demo never
+# produces a near-empty run. If care-need filtering yields fewer matches than
+# this, we top up with non-matching providers from the full directory.
+_MIN_AUDIT_PROVIDERS = 6
+
+
+def _filter_by_care_needs(
+    providers: list[Provider],
+    care_needs: list[str],
+) -> list[Provider]:
+    """Filter providers by case-insensitive substring overlap of care_needs against specialty.
+
+    A provider is kept when at least one of the requested care_needs appears as
+    a substring of its specialty string (e.g. ``"LGBTQ+ Affirming"`` matches
+    ``"LGBTQ+ Affirming, Anxiety"``). When no care_needs are given the input
+    list is returned untouched. When the matched subset is smaller than
+    ``_MIN_AUDIT_PROVIDERS`` we pad with non-matching providers so the audit
+    still has enough volume to feel real.
+    """
+    if not care_needs:
+        return providers
+    needs_lc = [n.strip().lower() for n in care_needs if n.strip()]
+    if not needs_lc:
+        return providers
+    matched: list[Provider] = [
+        p
+        for p in providers
+        if p.specialty and any(n in p.specialty.lower() for n in needs_lc)
+    ]
+    if len(matched) < _MIN_AUDIT_PROVIDERS:
+        matched_npis = {p.npi for p in matched}
+        extras = [p for p in providers if p.npi not in matched_npis]
+        return matched + extras[: max(0, _MIN_AUDIT_PROVIDERS - len(matched))]
+    return matched
+
+
 def _dt_iso(dt: datetime | None) -> str | None:
     if dt is None:
         return None
@@ -439,6 +475,7 @@ async def start_audit(
             status_code=500,
             detail="No sample providers: add data/providers_sample.json",
         )
+    providers = _filter_by_care_needs(providers, body.care_needs)
     audit_id = str(uuid.uuid4())
     state = AuditState(
         audit_id=audit_id,

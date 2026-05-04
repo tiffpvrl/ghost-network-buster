@@ -4,9 +4,7 @@ import type { AuditSummary, CallResult } from "../api";
 import { ApiError, apiGet } from "../api";
 import { isSoundEnabled, playCallSound, playComplete, setSoundEnabled } from "../audio";
 import AuditStepper from "../components/AuditStepper";
-import { useDashboardFilter } from "../contexts/DashboardFilterContext";
 import { DEMO_AUDIT_ID, DEMO_REPLAY_INTERVAL_MS, DEMO_SUMMARY } from "../demo-data";
-import { ghostReasonLabelShort } from "../labels";
 import { useLocale } from "../locale";
 
 const demoKey = import.meta.env.VITE_DEMO_API_KEY ?? "";
@@ -23,11 +21,8 @@ function SI({ d, sw = 1.75, children, ...p }: { d?: string; sw?: number; childre
 const IcoAlert = (p: SVGProps<SVGSVGElement>) =><SI {...p}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></SI>;
 const IcoCheck = (p: SVGProps<SVGSVGElement>) => <SI {...p} d="M20 6L9 17l-5-5" />;
 const IcoX = (p: SVGProps<SVGSVGElement>) => <SI {...p} d="M18 6L6 18M6 6l12 12" />;
-const IcoVoicemail = (p: SVGProps<SVGSVGElement>) => <SI {...p}><circle cx="6" cy="12" r="4"/><circle cx="18" cy="12" r="4"/><line x1="6" y1="16" x2="18" y2="16"/></SI>;
 const IcoDownload = (p: SVGProps<SVGSVGElement>) => <SI {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><line x1="12" y1="15" x2="12" y2="3"/></SI>;
 const IcoSparkles = (p: SVGProps<SVGSVGElement>) => <SI {...p} d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17l-1.9-5.1L4.5 10l5.6-1.4z" />;
-const IcoSearch = (p: SVGProps<SVGSVGElement>) => <SI {...p}><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></SI>;
-const IcoMore = (p: SVGProps<SVGSVGElement>) => <SI {...p}><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></SI>;
 const IcoChart = (p: SVGProps<SVGSVGElement>) => <SI {...p}><path d="M3 3v18h18"/><path d="M7 14l4-4 4 3 5-7"/></SI>;
 const IcoArrowUp = (p: SVGProps<SVGSVGElement>) => <SI {...p}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></SI>;
 const IcoArrowDown = (p: SVGProps<SVGSVGElement>) => <SI {...p}><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></SI>;
@@ -78,78 +73,6 @@ function Ring({ pct, size = 124, stroke = 9, color = "var(--danger)" }: { pct: n
         <div className="ring-pct">{pct}<span style={{ fontSize: "0.55em", color: "var(--muted)", fontWeight: 500 }}>%</span></div>
         <div className="ring-lbl">Ghosted</div>
       </div>
-    </div>
-  );
-}
-
-/* ── Trend chart ─────────────────────────────────────────────────────────── */
-function TrendChart({ values }: { values: number[] }) {
-  const w = 680, h = 180, padL = 32, padR = 12, padT = 12, padB = 26;
-  const pw = w - padL - padR;
-  const ph = h - padT - padB;
-  const max = Math.max(60, ...values);
-  if (values.length < 2) {
-    return <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none"><text x={w / 2} y={h / 2} textAnchor="middle" className="chart-axis-text">Collecting data…</text></svg>;
-  }
-  const pts = values.map((v, i) => {
-    const x = padL + (i / (values.length - 1)) * pw;
-    const y = padT + (1 - v / max) * ph;
-    return [x, y];
-  });
-  const path = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]},${p[1]}`).join(" ");
-  const area = path + ` L${pts[pts.length - 1][0]},${padT + ph} L${pts[0][0]},${padT + ph} Z`;
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.2" />
-          <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {[0, 0.25, 0.5, 0.75, 1].map((f, i) => (
-        <line key={i} x1={padL} y1={padT + ph * f} x2={w - padR} y2={padT + ph * f}
-          stroke="var(--border)" strokeDasharray={i === 0 || i === 4 ? "" : "2 4"} strokeWidth="1" />
-      ))}
-      {[0, 0.5, 1].map((f, i) => (
-        <text key={i} className="chart-axis-text" x={padL - 4} y={padT + ph * (1 - f) + 3} textAnchor="end">
-          {Math.round(max * f)}%
-        </text>
-      ))}
-      <path d={area} fill="url(#trend-fill)" />
-      <path d={path} fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-      {pts.map((p, i) => (
-        <circle key={i} cx={p[0]} cy={p[1]} r="2.5" fill="var(--surface)" stroke="var(--accent)" strokeWidth="1.5" />
-      ))}
-    </svg>
-  );
-}
-
-/* ── Activity item ───────────────────────────────────────────────────────── */
-function ActivityItem({ call, isNew, isSelected, onClick }: {
-  call: CallResult;
-  isNew: boolean;
-  isSelected: boolean;
-  onClick?: () => void;
-}) {
-  const Icon = call.status === "real" ? IcoCheck : call.status === "ghost" ? IcoX : IcoVoicemail;
-  const label = call.status === "real" ? "Verified" : call.status === "ghost" ? "Ghost" : "Voicemail";
-  const detail = call.status === "ghost" && call.ghost_reason
-    ? ghostReasonLabelShort(call.ghost_reason)
-    : call.status === "real" ? "Accepting · in-network"
-    : "Queued for retry";
-  return (
-    <div
-      className={`activity-item${isNew ? " is-new" : ""}${isSelected ? " selected" : ""}`}
-      onClick={onClick}
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-    >
-      <div className={`activity-icon ${call.status}`}><Icon /></div>
-      <div className="activity-body">
-        <div className="activity-name">{call.provider_name || call.npi}</div>
-        <div className="activity-detail">{detail}</div>
-      </div>
-      <div className={`activity-status-text ${call.status}`}>{label}</div>
     </div>
   );
 }
@@ -205,27 +128,11 @@ export default function Dashboard() {
 
   const [summary, setSummary] = useState<AuditSummary | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [flashMap, setFlashMap] = useState<Record<string, string>>({});
   const [elapsed, setElapsed] = useState(0);
-  const [selectedNpi, setSelectedNpi] = useState<string | null>(null);
   const [wsState, setWsState] = useState<WsState>("idle");
   const [soundOn, setSoundOn] = useState(() => isSoundEnabled());
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterGhost, setFilterGhost] = useState("all");
-  const { q: search, setQ: setSearch, setVisible: setSearchVisible } = useDashboardFilter();
 
-  // Show the topbar search input while the dashboard is mounted; reset query on unmount.
-  useEffect(() => {
-    setSearchVisible(true);
-    return () => {
-      setSearchVisible(false);
-      setSearch("");
-    };
-  }, [setSearchVisible, setSearch]);
-
-  const prevResults = useRef<Record<string, CallResult>>({});
   const startTime = useRef(Date.now());
-  const transcriptRef = useRef<HTMLDivElement>(null);
   const announceRef = useRef<HTMLDivElement>(null);
 
   const toggleSound = useCallback(() => {
@@ -332,32 +239,11 @@ export default function Dashboard() {
     return () => { cancelled = true; clearInterval(id); };
   }, [auditId, isDemo, t]);
 
-  // Flash on new results
-  useEffect(() => {
-    if (!summary) return;
-    const newFlashes: Record<string, string> = {};
-    for (const r of summary.results) {
-      if (!prevResults.current[r.npi])
-        newFlashes[r.npi] = r.status === "real" ? "flash-real" : r.status === "ghost" ? "flash-ghost" : "";
-    }
-    if (Object.keys(newFlashes).length > 0) {
-      setFlashMap(prev => ({ ...prev, ...newFlashes }));
-      setTimeout(() => setFlashMap(prev => { const n = { ...prev }; for (const k of Object.keys(newFlashes)) delete n[k]; return n; }), 700);
-    }
-    prevResults.current = Object.fromEntries(summary.results.map(r => [r.npi, r]));
-  }, [summary?.results]);
-
   // Live region
   useEffect(() => {
     if (summary && announceRef.current)
       announceRef.current.textContent = `${summary.calls_completed} of ${summary.providers_total} calls completed.`;
   }, [summary?.calls_completed, summary?.providers_total]);
-
-  // Auto-scroll activity feed
-  useEffect(() => {
-    if (selectedNpi) return;
-    if (transcriptRef.current) transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
-  }, [summary?.results.length, selectedNpi]);
 
   /* ── Derived values ── */
   const ghostPct = summary ? (summary.ghost_rate * 100).toFixed(1) : "0.0";
@@ -380,42 +266,9 @@ export default function Dashboard() {
     return Math.round((Math.max(1, elapsed) / done) * (total - done));
   }, [summary, done, total, doneAll, failed, elapsed]);
 
-  const breakdown = useMemo(() => {
-    if (!summary) return [];
-    const counts: Record<string, number> = {};
-    for (const r of summary.results) {
-      if (r.status === "ghost" && r.ghost_reason) counts[r.ghost_reason] = (counts[r.ghost_reason] ?? 0) + 1;
-    }
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  }, [summary]);
-
-  const filteredResults = useMemo(() => {
-    if (!summary) return [];
-    const q = search.trim().toLowerCase();
-    return summary.results.filter(r => {
-      const st = filterStatus === "vm" ? "voicemail" : filterStatus;
-      if (filterStatus !== "all" && r.status !== st) return false;
-      if (filterGhost !== "all" && (r.ghost_reason ?? "") !== filterGhost) return false;
-      if (q && !`${r.provider_name ?? ""} ${r.npi}`.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [summary, filterStatus, filterGhost, search]);
-
-  const lastCall = summary?.results[summary.results.length - 1] ?? null;
-  const pinnedCall = selectedNpi ? (summary?.results.find(r => r.npi === selectedNpi) ?? lastCall) : null;
-  const displayCall = pinnedCall ?? lastCall;
-  const tilesClickable = (doneAll || failed) && (summary?.results.length ?? 0) > 0;
-
-  const recentActivity = (summary?.results ?? []).slice(-6).reverse();
-  const ghostReasonsInResults = useMemo(() => {
-    const s = new Set<string>();
-    (summary?.results ?? []).forEach(r => { if (r.ghost_reason) s.add(r.ghost_reason); });
-    return Array.from(s).sort();
-  }, [summary?.results]);
-
-  // Sparkline data
+  // Sparkline data (per-chip trends only)
   const sparks = useMemo(() => {
-    const results = summary?.results ?? [];
+    const results: CallResult[] = summary?.results ?? [];
     const n = results.length;
     if (n < 2) return { rate: [] as number[], verified: [] as number[], ghosts: [] as number[], prog: [] as number[] };
     const pts = Math.min(8, n);
@@ -432,24 +285,6 @@ export default function Dashboard() {
     }
     return { rate, verified, ghosts, prog };
   }, [summary?.results?.length, summary?.providers_total]);
-
-  const trendValues = useMemo(() => {
-    const results = summary?.results ?? [];
-    if (results.length < 2) return [0];
-    const pts = Math.min(7, results.length);
-    const chunk = Math.ceil(results.length / pts);
-    return Array.from({ length: pts }, (_, i) => {
-      const sl = results.slice(0, (i + 1) * chunk);
-      return sl.length ? (sl.filter(r => r.status === "ghost").length / sl.length) * 100 : 0;
-    });
-  }, [summary?.results?.length]);
-
-  const tabCounts = {
-    all: summary?.results.length ?? 0,
-    ghost: summary?.ghost_count ?? 0,
-    real: summary?.real_count ?? 0,
-    vm: summary?.voicemail_count ?? 0,
-  };
 
   if (!auditId) return <p className="err">{t("dashboardMissingAudit")}</p>;
 
@@ -569,7 +404,7 @@ export default function Dashboard() {
           spark={sparks.prog} sparkColor="var(--accent)" />
       </div>
 
-      {/* ── Live audit panel ── */}
+      {/* ── Live audit panel (left side only) ── */}
       <div className="beacon-audit-panel">
         <div className="beacon-audit-panel-head">
           <div className="lhs">
@@ -579,14 +414,10 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="rhs">
-            {!doneAll && !failed && lastCall && (
-              <span>Last verified: <strong>{lastCall.provider_name ?? lastCall.npi}</strong></span>
-            )}
             {doneAll && <span>Audit completed in <strong>{elapsedStr}</strong></span>}
           </div>
         </div>
-        <div className="beacon-audit-panel-body">
-          {/* Left: ring + breakdown + progress */}
+        <div className="beacon-audit-panel-body" style={{ gridTemplateColumns: "1fr" }}>
           <div className="audit-progress-side">
             <div className="ring-stat">
               <Ring pct={Math.round(summary?.ghost_rate ? summary.ghost_rate * 100 : 0)} />
@@ -622,231 +453,7 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-
-          {/* Right: activity feed + transcript */}
-          <div className="activity-side">
-            <div className="activity-head">
-              <div className="title">
-                Live activity <span className="count">· last {Math.min(6, recentActivity.length)} calls</span>
-              </div>
-              {doneAll && (
-                <Link className="b-btn sm secondary" to={`/app/patient/results/${auditId}`} style={{ padding: "0.25rem 0.6rem" }}>View all</Link>
-              )}
-            </div>
-            <div className="activity-feed" ref={transcriptRef}>
-              {recentActivity.map((p, i) => (
-                <ActivityItem
-                  key={p.npi + i}
-                  call={p}
-                  isNew={i === 0 && done > 0}
-                  isSelected={selectedNpi === p.npi}
-                  onClick={tilesClickable ? () => setSelectedNpi(selectedNpi === p.npi ? null : p.npi) : undefined}
-                />
-              ))}
-              {recentActivity.length === 0 && !failed && (
-                <div className="empty-state">Waiting for first call to complete…</div>
-              )}
-            </div>
-
-            {/* Transcript */}
-            {displayCall && (
-              <div className="transcript-section">
-                <div className="transcript-head">
-                  <span>
-                    {pinnedCall ? `Transcript — ${pinnedCall.provider_name ?? pinnedCall.npi}` : `Last call — ${displayCall.provider_name ?? displayCall.npi}`}
-                  </span>
-                  {pinnedCall && (
-                    <button type="button" className="transcript-clear-btn" onClick={() => setSelectedNpi(null)}>× clear pin</button>
-                  )}
-                </div>
-                <div className="transcript-panel" style={{ maxHeight: 180 }}>
-                  {displayCall.transcript.split("\n").map((line, i) => {
-                    const isAgent = line.startsWith("Agent:");
-                    const isProvider = line.startsWith("Provider:");
-                    return <div key={i} className={isAgent ? "t-agent" : isProvider ? "t-provider" : "t-next"}>{line}</div>;
-                  })}
-                  <div className={`t-result ${displayCall.status}`}>
-                    RESULT: {displayCall.status.toUpperCase()}{displayCall.ghost_reason ? ` — ${ghostReasonLabelShort(displayCall.ghost_reason)}` : ""}
-                  </div>
-                  {!doneAll && <div className="t-next" style={{ marginTop: "0.5rem" }}>[NEXT CALL LOADING…]</div>}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
-      </div>
-
-      {/* ── Insights grid ── */}
-      <div className="beacon-insights-grid">
-        <div className="beacon-panel">
-          <div className="beacon-panel-head">
-            <div>
-              <div className="beacon-panel-title">Ghost rate trend</div>
-              <div className="beacon-panel-desc">{summary?.carrier ?? "…"} · {summary?.zip_code ?? "…"} · this audit run</div>
-            </div>
-          </div>
-          <div className="beacon-chart-wrap"><TrendChart values={trendValues} /></div>
-        </div>
-        <div className="beacon-panel">
-          <div className="beacon-panel-head">
-            <div>
-              <div className="beacon-panel-title">Why providers ghosted</div>
-              <div className="beacon-panel-desc">Top reasons by frequency</div>
-            </div>
-          </div>
-          {breakdown.length === 0 ? (
-            <div className="empty-state">No ghosts detected yet.</div>
-          ) : breakdown.slice(0, 5).map(([reason, count]) => {
-            const total_g = summary?.ghost_count || 1;
-            const pct = (count / total_g) * 100;
-            return (
-              <div className="ghost-bd-row" key={reason}>
-                <div>
-                  <div className="ghost-bd-lbl">{ghostReasonLabelShort(reason)}</div>
-                  <div className="ghost-bd-sub">{Math.round(pct)}% of ghost calls</div>
-                </div>
-                <div className="ghost-bd-track"><div className="ghost-bd-fill" style={{ width: pct + "%" }} /></div>
-                <div className="ghost-bd-ct">{count}</div>
-              </div>
-            );
-          })}
-          {/* Top real providers */}
-          {(summary?.top_providers ?? []).length > 0 && (
-            <div style={{ marginTop: "1rem", borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
-              <div style={{ fontSize: "0.72rem", fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.5rem" }}>
-                Confirmed usable
-              </div>
-              {(summary?.top_providers ?? []).slice(0, 3).map(p => (
-                <div key={p.npi} className="provider-card verified" style={{ marginBottom: "0.45rem" }}>
-                  <div className="verified-badge">USABLE IN THIS RUN</div>
-                  <div style={{ fontWeight: 600, fontSize: "0.82rem" }}>{p.provider_name || p.npi}</div>
-                  {p.specialty && <div style={{ fontSize: "0.7rem", color: "var(--muted)" }}>{p.specialty}</div>}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Provider table ── */}
-      <div className="beacon-section-heading">
-        <div>
-          <h2>Provider audit log</h2>
-          <div className="sub">Every call attempt with outcome and transcript</div>
-        </div>
-        <div className="beacon-section-actions">
-          {ghostReasonsInResults.length > 0 && (
-            <select
-              className="filter-select"
-              value={filterGhost}
-              onChange={e => setFilterGhost(e.target.value)}
-              style={{ fontSize: "0.74rem", padding: "0.3rem 0.5rem" }}
-            >
-              <option value="all">All reasons</option>
-              {ghostReasonsInResults.map(g => (
-                <option key={g} value={g}>{ghostReasonLabelShort(g)}</option>
-              ))}
-            </select>
-          )}
-          <Link className="b-btn sm secondary" to={`/app/patient/results/${auditId}`}>
-            <IcoDownload /> Full results
-          </Link>
-        </div>
-      </div>
-
-      <div className="beacon-table-panel">
-        <div className="beacon-table-toolbar">
-          {(["all", "ghost", "real", "vm"] as const).map(key => {
-            const labels = { all: "All", ghost: "Ghosts", real: "Verified", vm: "Voicemail" };
-            return (
-              <button key={key} className={`beacon-filter-tab${filterStatus === key ? " active" : ""}`} onClick={() => setFilterStatus(key)}>
-                {(key === "ghost" || key === "real" || key === "vm") && <span className={`beacon-filter-dot ${key}`} />}
-                {labels[key]} <span className="ct">{tabCounts[key]}</span>
-              </button>
-            );
-          })}
-          <div className="beacon-table-search">
-            <IcoSearch />
-            <input placeholder="Search by name or NPI" value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-        </div>
-        <table className="beacon-providers">
-          <thead>
-            <tr>
-              <th>Provider</th>
-              <th>Specialty</th>
-              <th>Status</th>
-              <th>Outcome</th>
-              <th className="num">Called at</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {filteredResults.slice(0, 50).map(r => {
-              const initials = (r.provider_name ?? r.npi).replace(/^Dr\.\s*/, "").split(" ").map(s => s[0]).slice(0, 2).join("").toUpperCase();
-              let statusEl: ReactNode, outcomeText: string;
-              if (r.status === "real") {
-                statusEl = <span className="beacon-status-pill real"><span className="dot" /> Verified</span>;
-                outcomeText = "Accepting new patients";
-              } else if (r.status === "ghost") {
-                statusEl = <span className="beacon-status-pill ghost"><span className="dot" /> Ghost</span>;
-                outcomeText = r.ghost_reason ? ghostReasonLabelShort(r.ghost_reason) : "—";
-              } else if (r.status === "voicemail") {
-                statusEl = <span className="beacon-status-pill voicemail"><span className="dot" /> Voicemail</span>;
-                outcomeText = "Queued for retry";
-              } else {
-                statusEl = <span className="beacon-status-pill"><span className="dot" /> {r.status}</span>;
-                outcomeText = "—";
-              }
-              const calledAt = r.verified_at
-                ? new Date(r.verified_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                : "—";
-              const isSelected = selectedNpi === r.npi;
-              return (
-                <tr
-                  key={r.npi}
-                  onClick={() => tilesClickable && setSelectedNpi(isSelected ? null : r.npi)}
-                  style={{
-                    cursor: tilesClickable ? "pointer" : "default",
-                    outline: isSelected ? "1.5px solid var(--accent)" : undefined,
-                    background: flashMap[r.npi] ? undefined : undefined,
-                  }}
-                  className={flashMap[r.npi] ?? ""}
-                >
-                  <td>
-                    <div className="provider-row-name">
-                      <div className="provider-row-avatar">{initials}</div>
-                      <div>
-                        <div className="provider-row-nm">{r.provider_name || r.npi}</div>
-                        <div className="provider-row-npi">NPI {r.npi}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>{r.specialty ?? "—"}</td>
-                  <td>{statusEl}</td>
-                  <td>{outcomeText}</td>
-                  <td className="num" style={{ color: "var(--muted)", fontFamily: "var(--font-mono)", fontSize: "0.72rem" }}>{calledAt}</td>
-                  <td>
-                    <button
-                      className="icon-mini-btn"
-                      title="Pin transcript"
-                      onClick={e => { e.stopPropagation(); setSelectedNpi(isSelected ? null : r.npi); }}
-                    >
-                      <IcoMore />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {filteredResults.length === 0 && (
-              <tr>
-                <td colSpan={6} style={{ textAlign: "center", color: "var(--muted)", padding: "1.5rem", fontSize: "0.78rem" }}>
-                  {(summary?.results.length ?? 0) === 0 ? "Calls will appear here as they complete." : "No results match this filter."}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
       </div>
     </div>
   );

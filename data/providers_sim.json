@@ -3,66 +3,77 @@
     "npi": "1730000001",
     "name": "Hudson Mind Collective",
     "phone": "+12125550101",
-    "specialty": "Anxiety, Trauma"
+    "specialty": "Anxiety, Trauma / PTSD",
+    "zip": "10001"
   },
   {
     "npi": "1730000002",
     "name": "Dr. Sarah Chen, LCSW",
     "phone": "+12125550102",
-    "specialty": "CBT, Depression",
+    "specialty": "Depression, CBT",
+    "zip": "10003",
     "mock_outcome": "ghost_disconnected"
   },
   {
     "npi": "1730000003",
     "name": "Park Slope Therapy Partners",
     "phone": "+17185550103",
-    "specialty": "Couples & Family"
+    "specialty": "Couples & Family, Grief",
+    "zip": "11215"
   },
   {
     "npi": "1730000004",
     "name": "Dr. Marcus Webb, PsyD",
     "phone": "+12125550104",
-    "specialty": "Trauma-Informed CBT",
+    "specialty": "Trauma / PTSD, In-Person",
+    "zip": "10025",
     "mock_outcome": "ghost_wrong_network"
   },
   {
     "npi": "1730000005",
     "name": "East Side Wellness Center",
     "phone": "+12125550105",
-    "specialty": "Adult ADHD",
+    "specialty": "ADHD, Anxiety",
+    "zip": "10128",
     "mock_outcome": "ghost_not_accepting_patients"
   },
   {
     "npi": "1730000006",
     "name": "Dr. Linda Okafor, MD",
     "phone": "+17185550106",
-    "specialty": "Anxiety, PTSD"
+    "specialty": "Anxiety, Trauma / PTSD",
+    "zip": "11201",
+    "mock_outcome": "real"
   },
   {
     "npi": "1730000007",
     "name": "Riverside Counseling Group",
     "phone": "+12125550107",
     "specialty": "General Therapy",
+    "zip": "10025",
     "mock_outcome": "ghost_no_behavioral_health"
   },
   {
     "npi": "1730000008",
     "name": "Dr. Priya Patel, LMFT",
-    "phone": "+12125550108",
+    "phone": "+17185550108",
     "specialty": "Spanish-speaking, Anxiety",
+    "zip": "11211",
     "mock_outcome": "real"
   },
   {
     "npi": "1730000009",
     "name": "Brooklyn Mind Collective",
     "phone": "+17185550109",
-    "specialty": "LGBTQ+ Affirming"
+    "specialty": "LGBTQ+ Affirming, Anxiety",
+    "zip": "11201"
   },
   {
     "npi": "1730000010",
     "name": "Dr. James Ostrowski, PhD",
-    "phone": "+12125550110",
-    "specialty": "Behavioral Health",
+    "phone": "+17185550110",
+    "specialty": "Behavioral Health, In-Person",
+    "zip": "10456",
     "mock_outcome": "ghost_retired"
   },
   {
@@ -70,12 +81,106 @@
     "name": "Greenpoint Wellness Center",
     "phone": "+17185550111",
     "specialty": "CBT, Anxiety",
+    "zip": "11222",
     "mock_outcome": "voicemail"
   },
   {
     "npi": "1730000012",
     "name": "Dr. Imani Adeyemi, LMHC",
     "phone": "+12125550112",
-    "specialty": "Grief, Trauma"
+    "specialty": "Grief, Trauma / PTSD",
+    "zip": "11215"
+  },
+  {
+    "npi": "1730000013",
+    "name": "Rainbow Path Therapy",
+    "phone": "+12125550113",
+    "specialty": "LGBTQ+ Affirming, Depression",
+    "zip": "10003",
+    "mock_outcome": "real"
+  },
+  {
+    "npi": "1730000014",
+    "name": "Dr. Carlos Mendez, LCSW",
+    "phone": "+17185550114",
+    "specialty": "Spanish-speaking, Depression",
+    "zip": "10453"
+  },
+  {
+    "npi": "1730000015",
+    "name": "Tribeca ADHD Specialists",
+    "phone": "+12125550115",
+    "specialty": "ADHD, Adult ADHD",
+    "zip": "10010",
+    "mock_outcome": "ghost_wrong_provider"
+  },
+  {
+    "npi": "1730000016",
+    "name": "Dr. Naomi Stein, PsyD",
+    "phone": "+12125550116",
+    "specialty": "Sliding Scale, Anxiety",
+    "zip": "11211"
+  },
+  {
+    "npi": "1730000017",
+    "name": "Telehealth Wellness NY",
+    "phone": "+12125550117",
+    "specialty": "Virtual Only, Depression",
+    "zip": "10001",
+    "mock_outcome": "real"
+  },
+  {
+    "npi": "1730000018",
+    "name": "Dr. Aisha Khan, LCSW",
+    "phone": "+17185550118",
+    "specialty": "LGBTQ+ Affirming, Trauma / PTSD",
+    "zip": "11215"
+  },
+  {
+    "npi": "1730000019",
+    "name": "Recovery Path Counseling",
+    "phone": "+12125550119",
+    "specialty": "Addiction, Grief",
+    "zip": "10128",
+    "mock_outcome": "ghost_not_accepting_patients"
+  },
+  {
+    "npi": "1730000020",
+    "name": "Dr. Robert Kim, PhD",
+    "phone": "+17185550120",
+    "specialty": "Addiction, Sliding Scale",
+    "zip": "11354",
+    "mock_outcome": "voicemail"
+  },
+  {
+    "npi": "1730000021",
+    "name": "Sunset Mental Health",
+    "phone": "+17185550121",
+    "specialty": "In-Person, Depression",
+    "zip": "11106",
+    "mock_outcome": "ghost_disconnected"
+  },
+  {
+    "npi": "1730000022",
+    "name": "Dr. Yuki Tanaka, LMFT",
+    "phone": "+12125550122",
+    "specialty": "ADHD, Sliding Scale",
+    "zip": "10003"
+  },
+  {
+    "npi": "1730000023",
+    "name": "Bronx Family Counseling",
+    "phone": "+17185550123",
+    "specialty": "Spanish-speaking, Grief",
+    "zip": "10456",
+    "mock_outcome": "real"
+  },
+  {
+    "npi": "1730000024",
+    "name": "Dr. Eleanor Whitfield, MD",
+    "phone": "+12125550124",
+    "specialty": "Behavioral Health, In-Person",
+    "zip": "10128",
+    "mock_outcome": "ghost_wrong_network"
   }
 ]

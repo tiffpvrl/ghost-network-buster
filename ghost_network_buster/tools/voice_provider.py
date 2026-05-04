@@ -222,6 +222,7 @@ class MockVoiceProvider(VoiceProvider):
         ts = datetime.now(timezone.utc).isoformat()
         name = provider.name
         spec = provider.specialty
+        zip_code = provider.zip
 
         if outcome == "real":
             return CallResult(
@@ -232,6 +233,7 @@ class MockVoiceProvider(VoiceProvider):
                 summary=_real_summary(carrier),
                 provider_name=name,
                 specialty=spec,
+                zip=zip_code,
                 verified_at=ts,
                 audio_note=_MOCK_AUDIO_NOTE,
             )
@@ -252,6 +254,7 @@ class MockVoiceProvider(VoiceProvider):
                 summary="Voicemail; no live confirmation of network status.",
                 provider_name=name,
                 specialty=spec,
+                zip=zip_code,
                 verified_at=ts,
                 audio_note=_MOCK_AUDIO_NOTE,
             )
@@ -266,6 +269,7 @@ class MockVoiceProvider(VoiceProvider):
             summary=_ghost_summary(outcome, carrier),
             provider_name=name,
             specialty=spec,
+            zip=zip_code,
             verified_at=ts,
             audio_note=_MOCK_AUDIO_NOTE,
         )

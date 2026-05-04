@@ -103,6 +103,7 @@ export type CallResult = {
   summary?: string | null;
   provider_name?: string | null;
   specialty?: string | null;
+  zip?: string | null;
   verified_at?: string | null;
   audio_note?: string | null;
 };

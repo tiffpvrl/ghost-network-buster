@@ -365,7 +365,12 @@ export default function Results() {
                   {t("resultsUsableBadge", { when: formatVerifiedAt(p.verified_at) })}
                 </div>
                 <h3>{p.provider_name || p.npi}</h3>
-                {p.specialty && <div className="detail">● Specialty: {p.specialty}</div>}
+                {p.specialty && (
+                  <div className="detail">
+                    ● Specialty: {p.specialty}
+                    {p.zip ? ` · ZIP ${p.zip}` : ""}
+                  </div>
+                )}
                 <div className="detail highlight">
                   ● Per call: aligned with {summary.carrier} inquiry (confirm member ID before booking).
                 </div>
