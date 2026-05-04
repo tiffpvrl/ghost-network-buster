@@ -54,13 +54,15 @@ export default function Results() {
   const shareTrapRef = useFocusTrap(shareGate, closeShare);
 
   const { q: search, setQ: setSearch, setVisible: setSearchVisible } = useDashboardFilter();
+  const showAllCallsGrid = isEmployerView || shortlistUnlocked;
   useEffect(() => {
-    setSearchVisible(true);
+    setSearchVisible(showAllCallsGrid);
+    if (!showAllCallsGrid) setSearch("");
     return () => {
       setSearchVisible(false);
       setSearch("");
     };
-  }, [setSearchVisible, setSearch]);
+  }, [setSearchVisible, setSearch, showAllCallsGrid]);
 
   useEffect(() => {
     if (!auditId || isDemo) return;
@@ -189,6 +191,12 @@ export default function Results() {
   const letterCtaKey = shortlistUnlocked ? "paywallComplaintCtaUpgrade" : "paywallComplaintCta";
   const showLetterUpgradeCard =
     shortlistUnlocked && !complaintUnlocked && summary.complaint_eligible;
+
+  /** PDF, CSV, share link, and complaint doc — same $8 add-on or $12.99 bundle as checkout "letter" / complaint flag. */
+  const artifactsUnlocked = complaintUnlocked;
+  const patientArtifactsLocked = !isEmployerView && !artifactsUnlocked;
+  const artifactsCheckoutPlan = shortlistUnlocked ? "letter" : "bundle";
+  const artifactsCheckoutCtaKey = shortlistUnlocked ? "paywallDownloadsAddOnCta" : "paywallDownloadsBundleCta";
 
   return (
     <div className="results-page">
@@ -431,25 +439,64 @@ export default function Results() {
         <div className="card print-hidden" style={{ marginBottom: 0 }}>
         <h2>{t("downloadsHeading")}</h2>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-          <button type="button" className="btn secondary" onClick={() => setShareGate(true)}>
-            {copied ? t("shareModalCopied") : t("copyShareButton")}
-          </button>
-          <button
-            type="button"
-            className="btn secondary"
-            disabled={downloading === "pdf"}
-            onClick={() => void grab(`/api/download/summary/${auditId}`, `gnb-audit-${auditId!.slice(0, 8)}.pdf`, "pdf")}
-          >
-            {downloading === "pdf" ? t("resultsDownloading") : t("downloadPdf")}
-          </button>
-          <button
-            type="button"
-            className="btn secondary"
-            disabled={downloading === "csv"}
-            onClick={() => void grab(`/api/download/csv/${auditId}`, `gnb-audit-${auditId!.slice(0, 8)}.csv`, "csv")}
-          >
-            {downloading === "csv" ? t("resultsDownloading") : t("downloadCsv")}
-          </button>
+          {patientArtifactsLocked ? (
+            <Link
+              to={`/checkout?plan=${artifactsCheckoutPlan}&audit=${auditId}`}
+              className="btn secondary"
+              style={{ textAlign: "left", lineHeight: 1.35 }}
+            >
+              <span style={{ display: "block", fontWeight: 600 }}>{t("copyShareButton")}</span>
+              <span style={{ display: "block", fontSize: "0.68rem", fontWeight: 500, opacity: 0.92 }}>
+                {t(artifactsCheckoutCtaKey)}
+              </span>
+            </Link>
+          ) : (
+            <button type="button" className="btn secondary" onClick={() => setShareGate(true)}>
+              {copied ? t("shareModalCopied") : t("copyShareButton")}
+            </button>
+          )}
+          {patientArtifactsLocked ? (
+            <Link
+              to={`/checkout?plan=${artifactsCheckoutPlan}&audit=${auditId}`}
+              className="btn secondary"
+              style={{ textAlign: "left", lineHeight: 1.35 }}
+            >
+              <span style={{ display: "block", fontWeight: 600 }}>{t("downloadPdf")}</span>
+              <span style={{ display: "block", fontSize: "0.68rem", fontWeight: 500, opacity: 0.92 }}>
+                {t(artifactsCheckoutCtaKey)}
+              </span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={downloading === "pdf"}
+              onClick={() => void grab(`/api/download/summary/${auditId}`, `gnb-audit-${auditId!.slice(0, 8)}.pdf`, "pdf")}
+            >
+              {downloading === "pdf" ? t("resultsDownloading") : t("downloadPdf")}
+            </button>
+          )}
+          {patientArtifactsLocked ? (
+            <Link
+              to={`/checkout?plan=${artifactsCheckoutPlan}&audit=${auditId}`}
+              className="btn secondary"
+              style={{ textAlign: "left", lineHeight: 1.35 }}
+            >
+              <span style={{ display: "block", fontWeight: 600 }}>{t("downloadCsv")}</span>
+              <span style={{ display: "block", fontSize: "0.68rem", fontWeight: 500, opacity: 0.92 }}>
+                {t(artifactsCheckoutCtaKey)}
+              </span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={downloading === "csv"}
+              onClick={() => void grab(`/api/download/csv/${auditId}`, `gnb-audit-${auditId!.slice(0, 8)}.csv`, "csv")}
+            >
+              {downloading === "csv" ? t("resultsDownloading") : t("downloadCsv")}
+            </button>
+          )}
           {complaintUnlocked ? (
             <button
               type="button"
@@ -500,7 +547,7 @@ export default function Results() {
         </div>
       ) : null}
 
-      {breakdownEntries.length > 0 ? (
+      {(isEmployerView || shortlistUnlocked) && breakdownEntries.length > 0 ? (
         <div className="results-section">
           <div className="card" style={{ marginBottom: 0 }}>
             <h2>{t("resultsGhostBreakdown")}</h2>
@@ -521,41 +568,45 @@ export default function Results() {
       ) : null}
 
       <div className="results-section results-section--tail">
-        <h2 style={{ marginBottom: "0.75rem" }}>{t("allCallsHeading")}</h2>
-        {(() => {
-          const trimmed = search.trim().toLowerCase();
-          const rows = trimmed
-            ? summary.results.filter((r) =>
-                `${r.provider_name ?? ""} ${r.npi}`.toLowerCase().includes(trimmed),
-              )
-            : summary.results;
-          return (
-            <>
-              {trimmed ? (
-                <p className="lede" style={{ fontSize: "0.78rem", marginBottom: "0.5rem" }}>
-                  Showing {rows.length} of {summary.results.length} calls matching “{search}”.
-                </p>
-              ) : null}
-              <div className="tile-grid" style={{ marginBottom: "1.25rem" }}>
-                {rows.map((row) => (
-                  <div
-                    key={`${row.npi}-${row.verified_at}`}
-                    className={`tile ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem" }}>
-                      <span className="name">{row.provider_name || row.npi}</span>
-                      <span className={`pill ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}>
-                        {row.status}
-                      </span>
-                    </div>
-                    {row.ghost_reason && <div className="meta">{ghostReasonLabelLong(row.ghost_reason)}</div>}
-                    {row.summary && !row.ghost_reason && <div className="meta">{row.summary.slice(0, 55)}</div>}
+        {showAllCallsGrid ? (
+          <>
+            <h2 style={{ marginBottom: "0.75rem" }}>{t("allCallsHeading")}</h2>
+            {(() => {
+              const trimmed = search.trim().toLowerCase();
+              const rows = trimmed
+                ? summary.results.filter((r) =>
+                    `${r.provider_name ?? ""} ${r.npi}`.toLowerCase().includes(trimmed),
+                  )
+                : summary.results;
+              return (
+                <>
+                  {trimmed ? (
+                    <p className="lede" style={{ fontSize: "0.78rem", marginBottom: "0.5rem" }}>
+                      Showing {rows.length} of {summary.results.length} calls matching “{search}”.
+                    </p>
+                  ) : null}
+                  <div className="tile-grid" style={{ marginBottom: "1.25rem" }}>
+                    {rows.map((row) => (
+                      <div
+                        key={`${row.npi}-${row.verified_at}`}
+                        className={`tile ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: "0.4rem" }}>
+                          <span className="name">{row.provider_name || row.npi}</span>
+                          <span className={`pill ${row.status === "real" ? "real" : row.status === "ghost" ? "ghost" : "voicemail"}`}>
+                            {row.status}
+                          </span>
+                        </div>
+                        {row.ghost_reason && <div className="meta">{ghostReasonLabelLong(row.ghost_reason)}</div>}
+                        {row.summary && !row.ghost_reason && <div className="meta">{row.summary.slice(0, 55)}</div>}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </>
-          );
-        })()}
+                </>
+              );
+            })()}
+          </>
+        ) : null}
 
         <Link to="/app/patient" className="print-hidden" style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
           {t("newAudit")}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNod
 import { Link, useParams } from "react-router-dom";
 import type { AuditSummary, CallResult } from "../api";
 import { ApiError, apiGet } from "../api";
+import { useAuth, type PatientAuditTierChoice } from "../auth/AuthProvider";
 import { isSoundEnabled, playCallSound, playComplete, setSoundEnabled } from "../audio";
 import AuditStepper from "../components/AuditStepper";
 import { DEMO_AUDIT_ID, DEMO_REPLAY_INTERVAL_MS, DEMO_SUMMARY } from "../demo-data";
@@ -9,6 +10,17 @@ import { useLocale } from "../locale";
 
 const demoKey = import.meta.env.VITE_DEMO_API_KEY ?? "";
 const HIGH_GHOST_FRAC = 0.7;
+
+const TIER_GATE_KEY = (auditId: string) => `gnb_tier_gate_${auditId}`;
+
+function readTierGateClosed(auditId: string | undefined, isDemoAudit: boolean): boolean {
+  if (!auditId || isDemoAudit) return true;
+  try {
+    return window.sessionStorage.getItem(TIER_GATE_KEY(auditId)) === "1";
+  } catch {
+    return false;
+  }
+}
 
 /* ── Icon helpers ────────────────────────────────────────────────────────── */
 function SI({ d, sw = 1.75, children, ...p }: { d?: string; sw?: number; children?: ReactNode; [k: string]: unknown }) {
@@ -124,6 +136,7 @@ export default function Dashboard() {
   const { t } = useLocale();
   const { auditId } = useParams();
   const isDemo = auditId === DEMO_AUDIT_ID;
+  const { applyPatientAuditTierChoice } = useAuth();
   const prefersReducedMotion = usePrefersReducedMotion();
 
   const [summary, setSummary] = useState<AuditSummary | null>(null);
@@ -131,9 +144,31 @@ export default function Dashboard() {
   const [elapsed, setElapsed] = useState(0);
   const [wsState, setWsState] = useState<WsState>("idle");
   const [soundOn, setSoundOn] = useState(() => isSoundEnabled());
+  const [tierGateClosed, setTierGateClosed] = useState(() =>
+    typeof window !== "undefined" ? readTierGateClosed(auditId, isDemo) : true,
+  );
 
   const startTime = useRef(Date.now());
   const announceRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setTierGateClosed(readTierGateClosed(auditId, isDemo));
+  }, [auditId, isDemo]);
+
+  const commitTierChoice = useCallback(
+    (choice: PatientAuditTierChoice) => {
+      if (auditId && !isDemo) {
+        applyPatientAuditTierChoice(auditId, choice);
+        try {
+          window.sessionStorage.setItem(TIER_GATE_KEY(auditId), "1");
+        } catch {
+          /* ignore */
+        }
+      }
+      setTierGateClosed(true);
+    },
+    [auditId, isDemo, applyPatientAuditTierChoice],
+  );
 
   const toggleSound = useCallback(() => {
     const next = !isSoundEnabled();
@@ -288,9 +323,70 @@ export default function Dashboard() {
 
   if (!auditId) return <p className="err">{t("dashboardMissingAudit")}</p>;
 
+  const showTierGate = auditId && !isDemo && !tierGateClosed;
+
   return (
     <div className="beacon-dashboard">
       <div ref={announceRef} className="sr-only" aria-live="polite" />
+      {showTierGate ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="tier-gate-title">
+          <div className="modal-panel card" style={{ maxWidth: 920 }}>
+            <p className="page-eyebrow" style={{ marginBottom: "0.5rem" }}>
+              {t("auditTierGateTitle")}
+            </p>
+            <h2 id="tier-gate-title" style={{ marginBottom: "0.5rem", fontSize: "1.25rem" }}>
+              {t("auditTierGateSubtitle")}
+            </h2>
+            <p className="lede" style={{ marginBottom: "1.25rem", fontSize: "0.85rem" }}>
+              {t("paywallFinePrint")}
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "0.75rem",
+              }}
+            >
+              <div className="card" style={{ marginBottom: 0, padding: "1rem" }}>
+                <div style={{ fontSize: "0.65rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--muted)" }}>
+                  {t("auditTierFreeTitle")}
+                </div>
+                <div style={{ fontSize: "1.35rem", fontWeight: 700, margin: "0.35rem 0" }}>{t("auditTierFreePrice")}</div>
+                <p className="lede" style={{ fontSize: "0.78rem", marginBottom: "1rem", minHeight: "4.5rem" }}>
+                  {t("auditTierFreeBody")}
+                </p>
+                <button type="button" className="btn full secondary" onClick={() => commitTierChoice("free")}>
+                  {t("auditTierFreeCta")}
+                </button>
+              </div>
+              <div className="card" style={{ marginBottom: 0, padding: "1rem", borderColor: "var(--accent)" }}>
+                <div style={{ fontSize: "0.65rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--muted)" }}>
+                  {t("auditTierShortlistTitle")}
+                </div>
+                <div style={{ fontSize: "1.35rem", fontWeight: 700, margin: "0.35rem 0" }}>{t("auditTierShortlistPrice")}</div>
+                <p className="lede" style={{ fontSize: "0.78rem", marginBottom: "1rem", minHeight: "4.5rem" }}>
+                  {t("auditTierShortlistBody")}
+                </p>
+                <button type="button" className="btn full" onClick={() => commitTierChoice("shortlist")}>
+                  {t("auditTierShortlistCta")}
+                </button>
+              </div>
+              <div className="card" style={{ marginBottom: 0, padding: "1rem" }}>
+                <div style={{ fontSize: "0.65rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--muted)" }}>
+                  {t("auditTierFullTitle")}
+                </div>
+                <div style={{ fontSize: "1.35rem", fontWeight: 700, margin: "0.35rem 0" }}>{t("auditTierFullPrice")}</div>
+                <p className="lede" style={{ fontSize: "0.78rem", marginBottom: "1rem", minHeight: "4.5rem" }}>
+                  {t("auditTierFullBody")}
+                </p>
+                <button type="button" className="btn full secondary" onClick={() => commitTierChoice("full")}>
+                  {t("auditTierFullCta")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {/* ── Page header ── */}
       <div className="beacon-page-header">
         <div>

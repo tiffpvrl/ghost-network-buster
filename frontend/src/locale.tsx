@@ -269,28 +269,50 @@ const DICT: Record<Locale, Record<string, string>> = {
     paywallFreePreviewLede:
       "Here's 1 confirmed real provider for free. {locked} more are blurred until you unlock this audit.",
     paywallUnlockCta: "Unlock shortlist — $4.99",
-    paywallBundleCta: "Unlock + complaint letter — $12.99",
-    paywallComplaintCta: "Unlock complaint letter — $12.99",
-    paywallComplaintCtaUpgrade: "Add complaint letter — $8",
+    paywallBundleCta: "Unlock full results pack — $12.99",
+    paywallComplaintCta: "Unlock results pack — $12.99",
+    paywallComplaintCtaUpgrade: "Add results pack — $8",
     paywallFinePrint:
       "Demo checkout in this build — no card is charged. Unlock state is stored locally in your browser.",
+    paywallDownloadsAddOnCta: "Unlock PDF, CSV & share — $8",
+    paywallDownloadsBundleCta: "Unlock PDF, CSV, share & letter — $12.99",
+
+    // ── Pre-run tier gate (patient live audit dashboard) ───────
+    auditTierGateTitle: "Choose how you want to use this audit",
+    auditTierGateSubtitle:
+      "Pick a tier before the live progress view. You can still upgrade later from your results page.",
+    auditTierFreeTitle: "Free",
+    auditTierFreePrice: "$0",
+    auditTierFreeBody:
+      "See one confirmed usable provider on your results page. The rest of the shortlist stays blurred until you upgrade.",
+    auditTierFreeCta: "Continue with Free",
+    auditTierShortlistTitle: "Full shortlist",
+    auditTierShortlistPrice: "$4.99",
+    auditTierShortlistBody:
+      "See every usable provider, names, transcripts, and the full call-by-call grid. PDF, CSV, share link, and complaint letter stay locked until you add the results pack.",
+    auditTierShortlistCta: "Continue — $4.99",
+    auditTierFullTitle: "Full results pack",
+    auditTierFullPrice: "$12.99",
+    auditTierFullBody:
+      "Everything in the full shortlist, plus PDF summary, CSV export, shareable link, and statute-cited complaint draft.",
+    auditTierFullCta: "Continue — $12.99",
 
     // ── Letter-only upgrade card (results page) ────────────────
-    letterUpgradeTitle: "Add the complaint letter",
+    letterUpgradeTitle: "Add the results pack",
     letterUpgradeBody:
-      "You unlocked the shortlist for $4.99. Add the statute-cited complaint draft for an additional $8 — same total as the $12.99 bundle.",
-    letterUpgradeCta: "Add complaint letter — $8",
+      "You unlocked the shortlist for $4.99. For $8 more, unlock PDF summary, CSV export, share link, and the statute-cited complaint draft — same total as the $12.99 bundle.",
+    letterUpgradeCta: "Add results pack — $8",
 
     // ── Checkout plan registry ─────────────────────────────────
     checkoutPlanUnlockTitle: "Unlock the full shortlist",
     checkoutPlanUnlockWhat:
       "See the full list of usable providers from this audit, including names, phone numbers, and call transcripts.",
-    checkoutPlanLetterTitle: "Add the complaint letter",
+    checkoutPlanLetterTitle: "Add the results pack",
     checkoutPlanLetterWhat:
-      "You already unlocked the shortlist for this audit. This adds the downloadable, statute-cited complaint draft you can take to your state insurance department.",
-    checkoutPlanBundleTitle: "Full Report + Complaint Letter",
+      "You already unlocked the shortlist for this audit. This adds PDF summary, CSV export, a shareable results link, and the statute-cited complaint draft for your state insurance department.",
+    checkoutPlanBundleTitle: "Full results pack",
     checkoutPlanBundleWhat:
-      "Everything in the shortlist unlock, plus a downloadable, statute-cited complaint draft you can take to your state insurance department.",
+      "Full shortlist plus PDF summary, CSV export, shareable link, and statute-cited complaint draft — everything in one purchase.",
     checkoutPlanTierStarterTitle: "Starter — Employer plan",
     checkoutPlanTierStarterWhat:
       "100–500 employees · 1 carrier audit / month · PDF compliance report.",

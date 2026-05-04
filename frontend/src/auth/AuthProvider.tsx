@@ -19,6 +19,9 @@ export type AuthUser = {
 
 export type EmployerTier = "starter" | "growth" | "enterprise";
 
+/** Instant tier choice on the live audit screen (demo checkout is skipped). */
+export type PatientAuditTierChoice = "free" | "shortlist" | "full";
+
 type UnlockState = { shortlist: boolean; complaint: boolean };
 
 const USER_KEY = "gnb_user";
@@ -37,6 +40,8 @@ type AuthContextValue = {
   unlockShortlist: (auditId: string) => void;
   unlockComplaint: (auditId: string) => void;
   unlockBundle: (auditId: string) => void;
+  /** Set shortlist / complaint flags for one audit from the pre-run tier picker. */
+  applyPatientAuditTierChoice: (auditId: string, choice: PatientAuditTierChoice) => void;
 
   // Employer subscription tier (mock)
   employerTier: EmployerTier | null;
@@ -160,6 +165,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const applyPatientAuditTierChoice = useCallback((auditId: string, choice: PatientAuditTierChoice) => {
+    setUnlocks((prev) => {
+      if (choice === "free") {
+        return { ...prev, [auditId]: { shortlist: false, complaint: false } };
+      }
+      if (choice === "shortlist") {
+        return { ...prev, [auditId]: { shortlist: true, complaint: false } };
+      }
+      return { ...prev, [auditId]: { shortlist: true, complaint: true } };
+    });
+  }, []);
+
   const setEmployerTier = useCallback((t: EmployerTier | null) => {
     setEmployerTierState(t);
   }, []);
@@ -175,6 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unlockShortlist,
       unlockComplaint,
       unlockBundle,
+      applyPatientAuditTierChoice,
       employerTier,
       setEmployerTier,
     }),
@@ -188,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unlockShortlist,
       unlockComplaint,
       unlockBundle,
+      applyPatientAuditTierChoice,
       employerTier,
       setEmployerTier,
     ],
