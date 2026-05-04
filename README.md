@@ -2,6 +2,8 @@
 
 AI voice auditor that calls every provider in an insurer's mental health directory and detects "ghost" listings — providers who are listed but unreachable, out-of-network, retired, or otherwise inaccessible. Generates regulatory complaint letters when the ghost rate exceeds legal thresholds.
 
+Two portals share the same backend: a **patient portal** for individual spot-check audits and an **employer portal** for batch audits across multiple carriers and ZIPs, with financial exposure modeling and carrier renewal negotiation packet generation.
+
 Built as a Columbia University Agentic AI capstone (May 2026).
 
 ---
@@ -10,10 +12,10 @@ Built as a Columbia University Agentic AI capstone (May 2026).
 
 | Concept | Implementation |
 |---------|---------------|
-| **Agent framework (Google ADK)** | `ghost_network_buster/adk_blueprint.py` + `pipeline/adk_audit.py` — `SequentialAgent` runs directory load → bounded-parallel voice calls → optional graph classify → corpus retrieve → `LlmAgent` RAG bullets + letter body. Introspect: `GET /api/agents/graph`. Production path is selected with **`USE_ADK_AUDIT`** (default: legacy `pipeline/run_audit.py` only). |
-| **Multi-agent orchestration** | **ADK mode** (`USE_ADK_AUDIT=true`): `run_audit_with_adk()` drives a `Runner` and maps ADK events to **`WsHub`** (`type: adk_event`) while keeping **`summary`** broadcasts. **Legacy mode**: FastAPI `asyncio` + `run_audit_pipeline` only — no ADK Runner for the audit tail. |
+| **Agent framework (Google ADK)** | `ghost_network_buster/adk_blueprint.py` + `pipeline/adk_audit.py` — `SequentialAgent` runs directory load → bounded-parallel voice calls → optional graph classify → corpus retrieve → `LlmAgent` RAG bullets + letter body. Introspect: `GET /api/agents/graph`. Production path selected with **`USE_ADK_AUDIT`** (default: legacy `pipeline/run_audit.py` only). |
+| **Multi-agent orchestration** | **ADK mode** (`USE_ADK_AUDIT=true`): `run_audit_with_adk()` drives a `Runner` and maps ADK events to **`WsHub`** (`type: adk_event`) while keeping **`summary`** broadcasts. **Legacy mode**: FastAPI `asyncio` + `run_audit_pipeline` only. |
 | **Tool use** | `tools/voice_provider.py` (Twilio outbound calls), `tools/rag.py` (regulatory corpus retrieval), `tools/memory_tool.py` (per-NPI result memory) |
-| **Hybrid classifier** | `agents/classifier.py` — keyword fast-path for high-confidence signals (disconnected, voicemail) with Gemini Flash LLM fallback for all other cases. 8 ghost reason categories. |
+| **Hybrid classifier** | `agents/classifier.py` — keyword fast-path for high-confidence signals (disconnected, voicemail) with Gemini Flash LLM fallback. 8 ghost reason categories. |
 | **RAG** | `tools/rag.py` — local TF-IDF over bundled regulatory corpus (`data/regulatory_corpus/`): NY ISC §3217-a/§4324, MHPAEA, NSA. RAG hits injected into complaint letters and returned in `AuditSummary.rag_hits`. |
 | **LLM structured output** | `agents/classifier.py` — Gemini Flash returns `{status, ghost_reason, summary}` JSON. `agents/complaint_agent.py` — Gemini synthesizes a multi-page complaint letter grounded in RAG hits. |
 | **Voice pipeline** | `main.py` (`/ws/twilio-audio/{call_id}`) — Twilio media stream → Pipecat 1.0 → Deepgram STT → `_VertexLLMProcessor` (Vertex Gemini, **streaming** `generate_content_stream` → `LLMTextFrame` chunks) → Deepgram TTS (**token** aggregation) → audio back to Twilio |
@@ -24,7 +26,92 @@ Built as a Columbia University Agentic AI capstone (May 2026).
 | **WebSocket streaming** | `services/ws_hub.py` + `WsHub` — pushes `{type:"summary", data:...}` to the frontend after every completed call |
 | **Persistence** | `services/audit_store.py` — in-process cache + local JSON + optional GCS. Audits survive server restarts when `AUDIT_LOCAL_DIR` or `GCS_AUDITS_BUCKET` is set. |
 | **Evals / golden dataset** | `evals/call_scenarios.json` — 20 labeled transcript scenarios covering all 8 ghost types, 3 real confirmations, voicemail, STT noise, and edge cases. Runner: `pytest tests/test_classifier_eval.py` |
-| **Demo replay mode** | `frontend/src/demo-data.ts` + `frontend/src/audio.ts` — fully client-side replay of a pre-canned audit at human-readable pace with synthesized Web Audio sound effects (SIT tone, chimes, arpeggio). No API calls placed. |
+| **Demo replay mode** | `frontend/src/demo-data.ts` + `frontend/src/audio.ts` — fully client-side replay of a pre-canned audit at human-readable pace with synthesized Web Audio sound effects. No API calls placed. |
+
+---
+
+## Frontend architecture
+
+The React + Vite + TypeScript frontend (`frontend/src/`) uses a **Beacon design system** — a consistent visual language shared across both portals.
+
+### Design tokens
+
+All color, spacing, and shadow values are CSS custom properties defined in `frontend/src/index.css`:
+
+| Token group | Values |
+|-------------|--------|
+| Accent (primary) | `--accent: #5b3df5` (indigo violet) / dark: `#8b6dff` |
+| Surface | `--surface`, `--surface-2`, `--bg` |
+| Semantic | `--success` (real), `--danger` (ghost), `--warning` (voicemail) |
+| Typography | Inter (UI), Instrument Serif italic (editorial accents), DM Mono (IDs, formulas) |
+| Shadows | `--shadow-sm`, `--shadow-md`, `--shadow-lg` |
+
+Dark mode is toggled via `data-theme="dark"` on `<html>` (persisted in `localStorage`).
+
+### Routing & roles
+
+| Route | Role | Page |
+|-------|------|------|
+| `/app/patient` | patient | Patient dashboard — single audit spot-check |
+| `/app/patient/audits/new` | patient | New audit form |
+| `/app/patient/audits/:id` | patient | Live audit results |
+| `/app/employer` | employer | Employer dashboard — network health overview |
+| `/app/employer/audits/new` | employer | New batch audit form |
+| `/app/employer/batches/:id` | employer | Batch drill-down |
+| `/app/employer/audits/:id` | employer | Single audit detail |
+| `/app/employer/packet` | employer | Carrier Renewal Negotiation Packet |
+
+The shared `AppLayout` renders the Beacon sidebar + sticky topbar and injects an `<Outlet>` for page content. Role-gating is handled by `RequireAuth` + `RoleGate`.
+
+---
+
+## Employer portal
+
+The employer portal targets HR/benefits teams running network adequacy compliance for a group plan. It adds several layers on top of the patient audit flow.
+
+### Batch audits
+
+An employer batch (`frontend/src/data/employerBatches.ts`) groups 1-to-N audits by carrier × ZIP. Each audit in the batch is assigned a simulated audit ID resolved by `frontend/src/data/employerSim.ts` against an 879-provider Aetna NYC pool (`frontend/src/data/providersPool.ts`, built from real NPPES + Aetna TiC data).
+
+### Network health dashboard (`/app/employer`)
+
+The employer home (`frontend/src/pages/app/EmployerHome.tsx`) surfaces:
+
+- **Hero card** — animated 5×7 carrier-×-ZIP matrix visualization (diagonal ripple pulse)
+- **Recent batches** — last 3 batch runs with status, carrier/ZIP counts, and timestamps
+- **Ghost rate by carrier** — all audited carriers ranked by ghost rate with severity-coded bars (severe ≥70%, high ≥60%)
+- **Financial exposure calculator** — live `headcount × 10% prevalence × weighted ghost rate × $4,783` estimate, editable headcount
+- **Coverage gaps by ZIP** — stacked real/ghost bar per ZIP with provider counts
+- **Carrier Renewal Negotiation Packet** — CTA card to build or view the packet (includes PDF memo, executive summary, and CSV evidence)
+
+### Carrier Renewal Negotiation Packet (`/app/employer/packet`)
+
+Client-side deterministic packet generator (`frontend/src/lib/negotiationPacket.ts`). Reads `EmployerAggregates` and produces a structured artifact with:
+
+1. Executive summary
+2. Negotiation asks (per-carrier ghost rate vs. legal threshold)
+3. Market evidence (cross-carrier benchmark)
+4. Financial concession targets
+5. Recommended contract language
+6. Provider evidence appendix
+
+The packet UI (`frontend/src/pages/app/EmployerPacket.tsx`) renders a print-ready layout. The negotiation packet PDF renderer lives in `frontend/src/lib/negotiationPacketPdf.ts`.
+
+> **Note:** The ADK orchestrator wiring (`adk_blueprint.py`) is scaffolded but intentionally not connected to the packet generator. The current implementation is fully deterministic and client-side — no LLM call is made for packet generation.
+
+---
+
+## Simulation data
+
+The employer portal runs entirely client-side against a curated simulation dataset — no backend calls are made for employer audits.
+
+**Provider pool:** 879 real Aetna NYC behavioral-health providers from NPPES + Aetna Transparency in Coverage MRF data, stored in `frontend/src/data/providersPool.ts`. Phone numbers are masked (555-XXXX).
+
+**Audit simulation:** `frontend/src/data/employerSim.ts` deterministically resolves each `(carrier, zip, auditId)` tuple to a set of call results. Ghost rates are seeded to reflect realistic NYC market conditions (60–92% by carrier in the sample data).
+
+**Multi-variant transcripts:** Each simulated call pulls a transcript variant from a pool covering all 8 ghost reason types, realistic provider dialogue, and STT-noise variants.
+
+**Dynamic demo context:** URL params (`?carrier=`, `?zip=`, `?careNeed=`) inject live context into the voice agent simulation for demo personalization.
 
 ---
 
@@ -61,6 +148,9 @@ npm run dev
 
 Open **http://localhost:5173** — Vite proxies `/api` and `/ws` to port 8000.
 
+- Patient portal: log in with role `patient`
+- Employer portal: log in with role `employer` (or append `?role=employer` in demo)
+
 ### GCP Cloud Shell (single command)
 
 From the **repository root** (the directory that contains `pyproject.toml` and `frontend/`):
@@ -69,21 +159,15 @@ From the **repository root** (the directory that contains `pyproject.toml` and `
 bash scripts/run-web-cloudshell.sh
 ```
 
-For **real Twilio / Pipecat** on this same machine, pass **`--with-ngrok`** so the script starts **ngrok → 8000** and **exports `PUBLIC_URL`** for `uvicorn` (after one-time `ngrok config add-authtoken <token>`):
+For **real Twilio / Pipecat** on this same machine, pass **`--with-ngrok`** so the script starts **ngrok → 8000** and **exports `PUBLIC_URL`** for `uvicorn`:
 
 ```bash
 bash scripts/run-web-cloudshell.sh --with-ngrok
 ```
 
-Equivalent: `GHB_WITH_NGROK=1 bash scripts/run-web-cloudshell.sh`.
+This installs **uv** if missing, runs **`uv sync`** (and **`uv sync --extra pipecat`** when **`VOICE_PROVIDER=pipecat`**), creates **`.env`** from **`.env.example`** when missing, installs npm deps once, then starts the API on **0.0.0.0:8000** and Vite on **0.0.0.0:5173**.
 
-This installs **uv** if missing, runs **`uv sync`** — and **`uv sync --extra pipecat`** when **`VOICE_PROVIDER=pipecat`** in **`.env`** (or in the process environment) so the live voice stack is installed — creates **`.env`** from **`.env.example`** when missing, installs npm deps once, then starts the API on **0.0.0.0:8000** and Vite on **0.0.0.0:5173**.
-
-If **`VOICE_PROVIDER=pipecat`**, expect a **larger** install (Silero, Deepgram client, etc.); on tiny disks combine with cache pruning above or use **`VOICE_PROVIDER=mock`** until you need real calls.
-
-In Cloud Shell, open **Web Preview → Preview on port 5173**. Demo: append **`/?demo=true`** to the preview URL.
-
-If **`uv sync` fails with “No space left on device”**, the default dependencies avoid **`uvicorn[standard]`** (no **uvloop**, smaller wheels). Free caches and retry: `uv cache prune && rm -rf ~/.cache/uv ~/.cache/pip`, then run the script again. For a faster server locally (larger install), use `uv sync --extra performance`.
+In Cloud Shell, open **Web Preview → Preview on port 5173**.
 
 ---
 
@@ -96,13 +180,13 @@ Visit **http://localhost:5173/?demo=true** or click **"Watch demo"** on the land
 - After replay: click any tile to pin its transcript in the live call panel
 - Downloads (PDF summary, complaint DOCX) work via `/api/download/*/demo` — seeded at startup
 
-The demo requires the backend to be running (for downloads), but places zero Twilio calls.
+The employer portal demo runs entirely client-side (no backend required) — the simulation data and aggregation are computed in-browser from `localStorage`.
 
 ---
 
 ## Deployed simulation (default — no Twilio)
 
-For a publicly shared URL (Cloud Run, ngrok, Cloud Shell preview, etc.) the patient pipeline must not place real phone calls. The repo's `.env.example` is configured for this by default:
+For a publicly shared URL the patient pipeline must not place real phone calls. The repo's `.env.example` is configured for this by default:
 
 ```env
 VOICE_PROVIDER=mock
@@ -113,23 +197,21 @@ MOCK_VOICE_REAL_SHARE=0.35
 MAX_PARALLEL_CALLS=1
 ```
 
-What this gives you:
+- `MockVoiceProvider` fabricates `CallResult`s entirely server-side — no Twilio, no Pipecat, no outbound HTTP — at 6–9 s per call.
+- 12 NY-themed synthetic providers in `data/providers_sim.json` with masked `212`/`718` 555-XXXX phone numbers.
+- Outcome variety covers all 7 ghost reasons plus `voicemail` and `real`.
+- The full RAG + ADK complaint-letter path runs unchanged.
 
-- `MockVoiceProvider` (in `ghost_network_buster/tools/voice_provider.py`) fabricates `CallResult`s entirely server-side — no Twilio, no Pipecat, no outbound HTTP — at 6–9 s per call.
-- 12 NY-themed synthetic providers in `data/providers_sim.json` with masked `212`/`718` 555-XXXX phone numbers; the provider's phone is **never** echoed into the transcript or the dashboard, even if a fixture leaks a real number.
-- Outcome variety covers all 7 ghost reasons the frontend has labels for (`disconnected`, `wrong_network`, `not_accepting_patients`, `no_behavioral_health`, `retired`, `wrong_provider`) plus `voicemail` and `real`, so the dashboard's ghost-reason breakdown chart looks like a real audit.
-- The full RAG + ADK paralegal complaint-letter path runs unchanged (state.results is shape-identical), so `/api/download/complaint/<id>` still produces a real DOCX with citations.
+Total wall-clock for a default 12-provider audit at `MAX_PARALLEL_CALLS=1`: roughly 60–100 s.
 
-Total wall-clock for a default 12-provider audit at `MAX_PARALLEL_CALLS=1`: roughly 60–100 s, matching the patient-form copy "~90 seconds for a typical sample".
-
-To **place real calls** locally (developer machine only), uncomment the override block at the bottom of `.env`:
+To **place real calls** locally, uncomment the override block at the bottom of `.env`:
 
 ```env
 VOICE_PROVIDER=pipecat
 PROVIDERS_DATA_FILE=data/providers_test.json
 ```
 
-…and supply Twilio + Deepgram credentials. The cost guard `PIPECAT_COST_GUARD=5` will stop you from accidentally fanning out a large fixture.
+…and supply Twilio + Deepgram credentials. The cost guard `PIPECAT_COST_GUARD=5` prevents accidental large fan-outs.
 
 ---
 
@@ -146,13 +228,9 @@ uv run pytest tests/test_classifier_eval.py -v
 uv run pytest tests/test_classifier_eval.py -v -k "S01 or S02 or S16 or S17"
 ```
 
-The eval suite loads `evals/call_scenarios.json` and runs `classify_transcript()` against each labeled scenario. LLM-path scenarios are automatically skipped when `GOOGLE_CLOUD_PROJECT` is not set.
-
 ---
 
 ## Pipecat + Deepgram live smoke test
-
-To verify the full voice pipeline (real Twilio calls):
 
 1. Set in `.env`:
    ```
@@ -165,10 +243,8 @@ To verify the full voice pipeline (real Twilio calls):
    TWILIO_FROM_NUMBER=+1...
    GOOGLE_CLOUD_PROJECT=...
    ```
-   When using **`run-web-cloudshell.sh --with-ngrok`**, you can leave **`PUBLIC_URL`** unset in `.env`; the script exports it for that session.
-2. Either run **`bash scripts/run-web-cloudshell.sh --with-ngrok`** (sets `PUBLIC_URL` from ngrok for that session), **or** start ngrok yourself: `ngrok http 8000` and set **`PUBLIC_URL`** in `.env` to the HTTPS forwarding URL.
-3. If you are **not** using the Cloud Shell script, run: `uv run uvicorn ghost_network_buster.main:app --reload --host 0.0.0.0 --port 8000`
-4. `POST /api/start-audit` with `max_providers: 1`
+2. Run `bash scripts/run-web-cloudshell.sh --with-ngrok` (exports `PUBLIC_URL` from ngrok) or start ngrok yourself and set `PUBLIC_URL` in `.env`.
+3. `POST /api/start-audit` with `max_providers: 1`
 
 **Expected logs on answer:** `twilio_audio_ws:deepgram_init` → `AudioDebugLogger: first audio chunk`.
 
@@ -180,16 +256,17 @@ If Deepgram returns HTTP 400: check `DEEPGRAM_STT_MODEL` (use `nova-3-general` o
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/start-audit` | Start an audit. Set **`USE_ADK_AUDIT=true`** (`.env`) to run the full ADK graph; default uses the legacy voice-only pipeline. |
+| `POST` | `/api/start-audit` | Start a patient audit. Set **`USE_ADK_AUDIT=true`** to run the full ADK graph; default uses legacy pipeline. |
 | `GET` | `/api/summary/{id}` | Current audit summary including `rag_hits` when completed |
 | `GET` | `/api/status/{id}` | Raw `AuditState` |
-| `WS` | `/ws/audit/{id}` | Live push: `{type:"summary", data:...}` after each call; with ADK audits also `{type:"adk_event", ...}` trace events |
+| `WS` | `/ws/audit/{id}` | Live push: `{type:"summary", data:...}` after each call; ADK audits also emit `{type:"adk_event", ...}` |
 | `GET` | `/api/download/summary/{id}` | PDF audit report |
 | `GET` | `/api/download/complaint/{id}` | DOCX regulatory complaint (requires ghost rate > 0) |
-| `POST` | `/api/seed-demo` | Seed the fixed demo audit state — called automatically at startup |
+| `POST` | `/api/seed-demo` | Seed the fixed demo audit state (called automatically at startup) |
 | `GET` | `/api/agents/graph` | ADK agent tree as JSON |
-| `POST` | `/api/agents/classify` | **Deprecated (debug):** same path as `ac_classify_transcript` / live audits |
 | `GET` | `/api/health` | Health check |
+
+> Employer batch audits, network health aggregation, negotiation packet generation, and quick exports are all **client-side** — they read/write `localStorage` and require no additional backend endpoints.
 
 ---
 
@@ -202,6 +279,8 @@ python -m ghost_network_buster.data_ingestion.join_providers --help
 ```
 
 Set `PROVIDERS_DATA_FILE` in `.env` to point the API at the output file. Default: `data/providers_test.json`.
+
+The employer simulation pool (`frontend/src/data/providersPool.ts`) was built from this same pipeline and contains 879 deduplicated behavioral-health providers across NYC ZIPs (10001, 10027, 11201, and others).
 
 ---
 

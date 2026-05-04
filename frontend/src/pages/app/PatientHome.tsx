@@ -53,6 +53,11 @@ export default function PatientHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const mostRecent = recent[0];
+  const demoHref = mostRecent
+    ? `/app/patient/audits/${DEMO_AUDIT_ID}?carrier=${encodeURIComponent(mostRecent.carrier)}&zip=${encodeURIComponent(mostRecent.zip)}&needs=${encodeURIComponent(mostRecent.careNeeds.join(","))}&planType=${encodeURIComponent(mostRecent.planType)}`
+    : `/app/patient/audits/${DEMO_AUDIT_ID}`;
+
   return (
     <div className="patient-home">
       <header className="patient-home__hero">
@@ -67,7 +72,7 @@ export default function PatientHome() {
           <Link to="/app/patient/audits/new" className="btn">
             {t("patientHomeStartCta")}
           </Link>
-          <Link to={`/app/patient/audits/${DEMO_AUDIT_ID}`} className="btn secondary">
+          <Link to={demoHref} className="btn secondary">
             {t("patientHomeDemoCta")}
           </Link>
         </div>

@@ -63,7 +63,7 @@ async def run_audit_pipeline(
 
         async def one(p: Provider) -> CallResult:
             async with sem:
-                r = await voice.call_provider(p, carrier_hint=carrier)
+                r = await voice.call_provider(p, carrier_hint=carrier, care_needs=list(state.care_needs))
                 logger.info(
                     "Audit %s | NPI %s (%s) → %s%s",
                     audit_id, p.npi, p.name, r.status,
@@ -85,7 +85,7 @@ async def run_audit_pipeline(
             new_results: list[CallResult] = []
             for r in state.results:
                 if r.status == "voicemail" and r.npi in by_npi:
-                    retry = await voice.call_provider(by_npi[r.npi], carrier_hint=carrier)
+                    retry = await voice.call_provider(by_npi[r.npi], carrier_hint=carrier, care_needs=list(state.care_needs))
                     await record_call(settings, retry)
                     new_results.append(retry)
                     replaced = True

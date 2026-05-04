@@ -5,7 +5,7 @@ import { ApiError, apiGet, downloadPdf } from "../api";
 import { useAuth } from "../auth/AuthProvider";
 import StatusLegend from "../components/StatusLegend";
 import { useDashboardFilter } from "../contexts/DashboardFilterContext";
-import { DEMO_AUDIT_ID, DEMO_SUMMARY } from "../demo-data";
+import { buildDemoSummary, DEMO_AUDIT_ID } from "../demo-data";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useLocale } from "../locale";
 import { ghostReasonLabelLong } from "../labels";
@@ -43,7 +43,16 @@ export default function Results() {
   const isEmployerView = location.pathname.startsWith("/app/employer/");
   const shortlistUnlocked = isEmployerView || (auditId ? isShortlistUnlocked(auditId) : false);
   const complaintUnlocked = isEmployerView || (auditId ? isComplaintUnlocked(auditId) : false);
-  const [summary, setSummary] = useState<AuditSummary | null>(isDemo ? DEMO_SUMMARY : null);
+  const [summary, setSummary] = useState<AuditSummary | null>(() => {
+    if (!isDemo) return null;
+    const params = new URLSearchParams(location.search);
+    const carrier  = params.get("carrier")  ?? undefined;
+    const zip      = params.get("zip")      ?? undefined;
+    const needsRaw = params.get("needs");
+    const careNeeds = needsRaw ? needsRaw.split(",").filter(Boolean) : undefined;
+    const planType = params.get("planType") ?? undefined;
+    return buildDemoSummary({ carrier, zip, careNeeds, planType });
+  });
   const [loadErr, setLoadErr] = useState<{ status?: number; message: string } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
