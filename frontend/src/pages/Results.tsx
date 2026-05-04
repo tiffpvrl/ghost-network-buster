@@ -179,6 +179,17 @@ export default function Results() {
   }
   const breakdownEntries = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
 
+  const FREE_PREVIEW_COUNT = 1;
+  const freeProviders = summary.top_providers.slice(0, FREE_PREVIEW_COUNT);
+  const lockedProviders = shortlistUnlocked
+    ? []
+    : summary.top_providers.slice(FREE_PREVIEW_COUNT);
+  const showShortlistPaywall = !shortlistUnlocked && lockedProviders.length > 0;
+  const letterCheckoutPlan = shortlistUnlocked ? "letter" : "bundle";
+  const letterCtaKey = shortlistUnlocked ? "paywallComplaintCtaUpgrade" : "paywallComplaintCta";
+  const showLetterUpgradeCard =
+    shortlistUnlocked && !complaintUnlocked && summary.complaint_eligible;
+
   return (
     <div className="results-page">
       {shareGate ? (
@@ -330,11 +341,11 @@ export default function Results() {
             </button>
           ) : summary.complaint_eligible ? (
             <Link
-              to={`/checkout?plan=bundle&audit=${auditId}`}
+              to={`/checkout?plan=${letterCheckoutPlan}&audit=${auditId}`}
               className="btn print-hidden"
               style={{ flexShrink: 0, fontSize: "0.72rem" }}
             >
-              {t("paywallComplaintCta")}
+              {t(letterCtaKey)}
             </Link>
           ) : null}
         </div>
@@ -346,64 +357,67 @@ export default function Results() {
         <h2 style={{ marginBottom: "1rem" }}>{t("shortlistHeading")}</h2>
         {summary.top_providers.length === 0 ? (
           <p className="lede">{t("shortlistEmpty")}</p>
-        ) : shortlistUnlocked ? (
-          summary.top_providers.map((p: CallResult) => (
-          <div key={p.npi} className="provider-card verified">
-            <div className="verified-badge">
-              {t("resultsUsableBadge", { when: formatVerifiedAt(p.verified_at) })}
-            </div>
-            <h3>{p.provider_name || p.npi}</h3>
-            {p.specialty && <div className="detail">● Specialty: {p.specialty}</div>}
-            <div className="detail highlight">
-              ● Per call: aligned with {summary.carrier} inquiry (confirm member ID before booking).
-            </div>
-            <div className="detail highlight">
-              ● Per call: accepting new patients as described in transcript (always re-verify).
-            </div>
-            {p.summary && (
-              <div className="detail" style={{ marginTop: "0.5rem", fontStyle: "italic" }}>
-                {p.summary}
-              </div>
-            )}
-            <div className="print-hidden" style={{ display: "flex", gap: "0.5rem", marginTop: "0.85rem", flexWrap: "wrap" }}>
-              <button type="button" className="btn secondary" onClick={() => setOpen(open === p.npi ? null : p.npi)}>
-                {open === p.npi ? t("resultsHideTranscript") : t("resultsViewTranscript")}
-              </button>
-              {p.phone ? (
-                <span className="detail">
-                  {t("resultsPhoneOnFile")} {p.phone}
-                </span>
-              ) : null}
-            </div>
-            {open === p.npi && <pre className="mono" style={{ marginTop: "0.65rem" }}>{p.transcript}</pre>}
-          </div>
-          ))
         ) : (
           <>
-            <p className="lede" style={{ marginBottom: "1rem" }}>
-              {t("paywallShortlistTeaser", { n: summary.top_providers.length })}
-            </p>
-            <div style={{ marginBottom: "1.25rem" }}>
-              {summary.top_providers.map((p: CallResult) => (
-                <div key={p.npi} className="provider-card verified locked-teaser" aria-hidden="true">
-                  <div className="verified-badge">
-                    {t("resultsUsableBadge", { when: formatVerifiedAt(p.verified_at) })}
-                  </div>
-                  <h3 style={{ filter: "blur(0.4px)" }}>{redactName(p.provider_name)}</h3>
-                  {p.specialty && (
-                    <div className="detail">● Specialty: {p.specialty}</div>
-                  )}
-                  <div className="detail highlight">
-                    ● Phone, transcript, and verification details unlock with $4.99.
-                  </div>
+            {(shortlistUnlocked ? summary.top_providers : freeProviders).map((p: CallResult) => (
+              <div key={p.npi} className="provider-card verified">
+                <div className="verified-badge">
+                  {t("resultsUsableBadge", { when: formatVerifiedAt(p.verified_at) })}
                 </div>
-              ))}
-            </div>
-            <PaywallCard
-              auditId={auditId}
-              t={t}
-              eligibleComplaint={summary.complaint_eligible}
-            />
+                <h3>{p.provider_name || p.npi}</h3>
+                {p.specialty && <div className="detail">● Specialty: {p.specialty}</div>}
+                <div className="detail highlight">
+                  ● Per call: aligned with {summary.carrier} inquiry (confirm member ID before booking).
+                </div>
+                <div className="detail highlight">
+                  ● Per call: accepting new patients as described in transcript (always re-verify).
+                </div>
+                {p.summary && (
+                  <div className="detail" style={{ marginTop: "0.5rem", fontStyle: "italic" }}>
+                    {p.summary}
+                  </div>
+                )}
+                <div className="print-hidden" style={{ display: "flex", gap: "0.5rem", marginTop: "0.85rem", flexWrap: "wrap" }}>
+                  <button type="button" className="btn secondary" onClick={() => setOpen(open === p.npi ? null : p.npi)}>
+                    {open === p.npi ? t("resultsHideTranscript") : t("resultsViewTranscript")}
+                  </button>
+                  {p.phone ? (
+                    <span className="detail">
+                      {t("resultsPhoneOnFile")} {p.phone}
+                    </span>
+                  ) : null}
+                </div>
+                {open === p.npi && <pre className="mono" style={{ marginTop: "0.65rem" }}>{p.transcript}</pre>}
+              </div>
+            ))}
+            {showShortlistPaywall ? (
+              <>
+                <p className="lede" style={{ marginBottom: "1rem", fontSize: "0.85rem" }}>
+                  {t("paywallFreePreviewLede", { locked: lockedProviders.length })}
+                </p>
+                <div style={{ marginBottom: "1.25rem" }}>
+                  {lockedProviders.map((p: CallResult) => (
+                    <div key={p.npi} className="provider-card verified locked-teaser" aria-hidden="true">
+                      <div className="verified-badge">
+                        {t("resultsUsableBadge", { when: formatVerifiedAt(p.verified_at) })}
+                      </div>
+                      <h3 style={{ filter: "blur(0.4px)" }}>{redactName(p.provider_name)}</h3>
+                      {p.specialty && (
+                        <div className="detail">● Specialty: {p.specialty}</div>
+                      )}
+                      <div className="detail highlight">
+                        ● Phone, transcript, and verification details unlock with $4.99.
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <PaywallCard
+                  auditId={auditId}
+                  t={t}
+                  eligibleComplaint={summary.complaint_eligible}
+                />
+              </>
+            ) : null}
           </>
         )}
       </div>
@@ -443,18 +457,43 @@ export default function Results() {
             </button>
           ) : (
             <Link
-              to={`/checkout?plan=bundle&audit=${auditId}`}
+              to={`/checkout?plan=${letterCheckoutPlan}&audit=${auditId}`}
               className="btn secondary"
               aria-disabled={!summary.complaint_eligible}
               style={summary.complaint_eligible ? undefined : { pointerEvents: "none", opacity: 0.55 }}
               title={summary.complaint_eligible ? "" : "Requires at least one ghost (failed) listing"}
             >
-              {t("paywallComplaintCta")}
+              {t(letterCtaKey)}
             </Link>
           )}
         </div>
       </div>
       </div>
+
+      {showLetterUpgradeCard ? (
+        <div className="results-section">
+          <div className="paywall-card print-hidden" role="region" aria-labelledby="upgrade-title">
+            <div className="paywall-card__head">
+              <span className="paywall-card__lock" aria-hidden>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="4" y="11" width="16" height="10" rx="2" />
+                  <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                </svg>
+              </span>
+              <h3 id="upgrade-title" className="paywall-card__title">
+                {t("letterUpgradeTitle")}
+              </h3>
+            </div>
+            <p className="paywall-card__body">{t("letterUpgradeBody")}</p>
+            <div className="paywall-card__actions">
+              <Link to={`/checkout?plan=letter&audit=${auditId}`} className="btn">
+                {t("letterUpgradeCta")}
+              </Link>
+            </div>
+            <p className="paywall-card__fineprint">{t("paywallFinePrint")}</p>
+          </div>
+        </div>
+      ) : null}
 
       {breakdownEntries.length > 0 ? (
         <div className="results-section">

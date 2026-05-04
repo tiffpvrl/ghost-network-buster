@@ -35,6 +35,7 @@ type AuthContextValue = {
   isShortlistUnlocked: (auditId: string) => boolean;
   isComplaintUnlocked: (auditId: string) => boolean;
   unlockShortlist: (auditId: string) => void;
+  unlockComplaint: (auditId: string) => void;
   unlockBundle: (auditId: string) => void;
 
   // Employer subscription tier (mock)
@@ -145,6 +146,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const unlockComplaint = useCallback((auditId: string) => {
+    setUnlocks((prev) => {
+      const cur = prev[auditId] ?? { shortlist: false, complaint: false };
+      return { ...prev, [auditId]: { ...cur, complaint: true } };
+    });
+  }, []);
+
   const unlockBundle = useCallback((auditId: string) => {
     setUnlocks((prev) => ({
       ...prev,
@@ -165,6 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isShortlistUnlocked,
       isComplaintUnlocked,
       unlockShortlist,
+      unlockComplaint,
       unlockBundle,
       employerTier,
       setEmployerTier,
@@ -177,6 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isShortlistUnlocked,
       isComplaintUnlocked,
       unlockShortlist,
+      unlockComplaint,
       unlockBundle,
       employerTier,
       setEmployerTier,

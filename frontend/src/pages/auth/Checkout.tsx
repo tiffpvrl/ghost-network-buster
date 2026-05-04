@@ -8,6 +8,7 @@ const DEMO_LABEL =
 
 type PlanId =
   | "unlock"
+  | "letter"
   | "bundle"
   | "tier-starter"
   | "tier-growth"
@@ -29,6 +30,14 @@ const PLANS: Record<PlanId, PlanDef> = {
     titleKey: "checkoutPlanUnlockTitle",
     priceLabel: "$4.99",
     whatKey: "checkoutPlanUnlockWhat",
+    cta: "pay",
+    redirect: (auditId) => (auditId ? `/app/patient/results/${auditId}` : "/app/patient"),
+  },
+  letter: {
+    id: "letter",
+    titleKey: "checkoutPlanLetterTitle",
+    priceLabel: "$8.00",
+    whatKey: "checkoutPlanLetterWhat",
     cta: "pay",
     redirect: (auditId) => (auditId ? `/app/patient/results/${auditId}` : "/app/patient"),
   },
@@ -69,12 +78,19 @@ const PLANS: Record<PlanId, PlanDef> = {
 };
 
 function isPlanId(v: string | null): v is PlanId {
-  return v === "unlock" || v === "bundle" || v === "tier-starter" || v === "tier-growth" || v === "tier-enterprise";
+  return (
+    v === "unlock" ||
+    v === "letter" ||
+    v === "bundle" ||
+    v === "tier-starter" ||
+    v === "tier-growth" ||
+    v === "tier-enterprise"
+  );
 }
 
 export default function Checkout() {
   const { t } = useLocale();
-  const { user, unlockShortlist, unlockBundle, setEmployerTier } = useAuth();
+  const { user, unlockShortlist, unlockComplaint, unlockBundle, setEmployerTier } = useAuth();
   const nav = useNavigate();
   const [params] = useSearchParams();
   const [busy, setBusy] = useState(false);
@@ -95,6 +111,7 @@ export default function Checkout() {
     setBusy(true);
     window.setTimeout(() => {
       if (plan.id === "unlock" && auditId) unlockShortlist(auditId);
+      else if (plan.id === "letter" && auditId) unlockComplaint(auditId);
       else if (plan.id === "bundle" && auditId) unlockBundle(auditId);
       else if (plan.tier) setEmployerTier(plan.tier);
       nav(plan.redirect(auditId), { replace: true });

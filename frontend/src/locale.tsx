@@ -265,17 +265,29 @@ const DICT: Record<Locale, Record<string, string>> = {
     paywallBody:
       "Names, phone numbers, transcripts, and verification details are hidden until you unlock this audit. One-time charge — no subscription.",
     paywallShortlistTeaser:
-      "We found {n} usable provider listings. Names, phone numbers, and transcripts are hidden until you unlock this audit.",
+      "You can see 1 of {total} usable provider listings. Unlock to see the other {locked} — names, phone numbers, and call transcripts.",
+    paywallFreePreviewLede:
+      "Here's 1 confirmed real provider for free. {locked} more are blurred until you unlock this audit.",
     paywallUnlockCta: "Unlock shortlist — $4.99",
     paywallBundleCta: "Unlock + complaint letter — $12.99",
     paywallComplaintCta: "Unlock complaint letter — $12.99",
+    paywallComplaintCtaUpgrade: "Add complaint letter — $8",
     paywallFinePrint:
       "Demo checkout in this build — no card is charged. Unlock state is stored locally in your browser.",
+
+    // ── Letter-only upgrade card (results page) ────────────────
+    letterUpgradeTitle: "Add the complaint letter",
+    letterUpgradeBody:
+      "You unlocked the shortlist for $4.99. Add the statute-cited complaint draft for an additional $8 — same total as the $12.99 bundle.",
+    letterUpgradeCta: "Add complaint letter — $8",
 
     // ── Checkout plan registry ─────────────────────────────────
     checkoutPlanUnlockTitle: "Unlock the full shortlist",
     checkoutPlanUnlockWhat:
       "See the full list of usable providers from this audit, including names, phone numbers, and call transcripts.",
+    checkoutPlanLetterTitle: "Add the complaint letter",
+    checkoutPlanLetterWhat:
+      "You already unlocked the shortlist for this audit. This adds the downloadable, statute-cited complaint draft you can take to your state insurance department.",
     checkoutPlanBundleTitle: "Full Report + Complaint Letter",
     checkoutPlanBundleWhat:
       "Everything in the shortlist unlock, plus a downloadable, statute-cited complaint draft you can take to your state insurance department.",
