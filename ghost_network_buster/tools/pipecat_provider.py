@@ -61,12 +61,13 @@ class PipecatVoiceProvider:
         provider: Provider,
         *,
         carrier_hint: str = "Aetna",
+        care_needs: list[str] | None = None,
     ) -> CallResult:
         call_id = str(uuid.uuid4())
         loop = asyncio.get_event_loop()
         future: asyncio.Future[CallResult] = loop.create_future()
         _PENDING_CALLS[call_id] = future
-        _CALL_META[call_id] = {"provider": provider, "carrier_hint": carrier_hint}
+        _CALL_META[call_id] = {"provider": provider, "carrier_hint": carrier_hint, "care_needs": care_needs or []}
 
         answer_url = f"{self._public_url}/webhook/twilio/answer/{call_id}"
         ts = datetime.now(timezone.utc).isoformat()

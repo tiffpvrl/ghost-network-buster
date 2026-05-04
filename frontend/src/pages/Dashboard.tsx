@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import type { AuditSummary, CallResult } from "../api";
 import { ApiError, apiGet } from "../api";
 import { useAuth, type PatientAuditTierChoice } from "../auth/AuthProvider";
-import { isSoundEnabled, playCallSound, playComplete, setSoundEnabled } from "../audio";
+import { isSoundEnabled, playComplete, setSoundEnabled } from "../audio";
 import AuditStepper from "../components/AuditStepper";
 import { DEMO_AUDIT_ID, DEMO_REPLAY_INTERVAL_MS, DEMO_SUMMARY } from "../demo-data";
 import { useLocale } from "../locale";
@@ -191,7 +191,6 @@ export default function Dashboard() {
     let timerId: number;
     const tick = () => {
       const result = DEMO_SUMMARY.results[idx];
-      playCallSound(result.status, result.ghost_reason);
       idx++;
       const slice = DEMO_SUMMARY.results.slice(0, idx);
       const ghostCount = slice.filter(r => r.status === "ghost").length;

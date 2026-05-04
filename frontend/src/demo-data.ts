@@ -1,134 +1,145 @@
 import type { AuditSummary } from "./api";
+import {
+  ghostSummary,
+  ghostTranscript,
+  GHOST_REASONS,
+  realSummary,
+  realTranscript,
+  sampleProviders,
+  specialtyPool,
+  voicemailSummary,
+  voicemailTranscript,
+} from "./data/providersPool";
 
 export const DEMO_AUDIT_ID = "demo";
-export const DEMO_REPLAY_INTERVAL_MS = 2500; // 2.5s per call — readable pace for live demo
+export const DEMO_REPLAY_INTERVAL_MS = 1500; // 1.5s per call — fast demo pace (~26 calls in 40s)
 
-const results: AuditSummary["results"] = [
-  {
-    npi: "1234567890",
-    phone: "212-555-0101",
-    status: "ghost",
-    ghost_reason: "disconnected",
-    provider_name: "Dr. Sarah Chen, LCSW",
-    specialty: "Anxiety, Trauma",
-    transcript:
-      "Agent: Hi, I'm calling to verify if Dr. Sarah Chen accepts Aetna insurance and is accepting new patients for anxiety and trauma therapy.\n[Automated message: The number you have dialed has been disconnected or is no longer in service.]\nAgent: Logging result — disconnected number.",
-    summary: "Number disconnected. Provider unreachable.",
-    verified_at: "2026-05-02T10:01:00Z",
-  },
-  {
-    npi: "1234567891",
-    phone: "212-555-0102",
-    status: "ghost",
-    ghost_reason: "wrong_network",
-    provider_name: "Dr. Marcus Webb, PhD",
-    specialty: "CBT, Depression",
-    transcript:
-      "Agent: Hi, I'm calling to verify whether Dr. Webb accepts Aetna insurance for outpatient therapy.\nReceptionist: Dr. Webb dropped Aetna back in 2023. He's cash-pay only now.\nAgent: Is he planning to rejoin any networks?\nReceptionist: No, I don't believe so.",
-    summary: "No longer in Aetna network since 2023.",
-    verified_at: "2026-05-02T10:02:30Z",
-  },
-  {
-    npi: "1234567892",
-    phone: "212-555-0103",
-    status: "ghost",
-    ghost_reason: "not_accepting_patients",
-    provider_name: "East Side Wellness Center",
-    specialty: "General Therapy",
-    transcript:
-      "Agent: Good afternoon. I'm calling to confirm if you're accepting new Aetna patients for anxiety and trauma therapy.\nReceptionist: We're completely full. The waitlist has been closed since February — we don't know when we'll reopen it.\nAgent: Can you give any estimate on timeline?\nReceptionist: Honestly, no. I'd suggest looking elsewhere.",
-    summary: "Closed waitlist since February, no timeline to reopen.",
-    verified_at: "2026-05-02T10:04:00Z",
-  },
-  {
-    npi: "1234567893",
-    phone: "212-555-0104",
-    status: "real",
-    ghost_reason: null,
-    provider_name: "Dr. Linda Okafor, LMFT",
-    specialty: "Trauma-Informed CBT",
-    transcript:
-      "Agent: Hi, I'm calling to verify if Dr. Okafor is accepting new Aetna patients for anxiety and trauma therapy.\nReceptionist: Yes! Dr. Okafor is in-network with Aetna and we do have availability. She specializes in trauma-informed CBT.\nAgent: Can you confirm she's currently accepting new patients?\nReceptionist: Absolutely — openings as early as next week.",
-    summary: "Confirmed in-network, accepting new patients. Openings next week.",
-    verified_at: "2026-05-02T10:05:30Z",
-  },
-  {
-    npi: "1234567894",
-    phone: "212-555-0105",
-    status: "ghost",
-    ghost_reason: "wrong_provider",
-    provider_name: "Dr. James Ostrowski, PsyD",
-    specialty: "Behavioral Health",
-    transcript:
-      "Agent: Hi, I'm trying to reach Dr. James Ostrowski at Midtown Behavioral Health.\nReceptionist: Dr. Ostrowski hasn't practiced here in over two years. We don't know where he relocated.\nAgent: Is there another Aetna-network therapist at this location?\nReceptionist: We don't have any Aetna providers on staff.",
-    summary: "Provider left practice 2+ years ago. Location has no Aetna coverage.",
-    verified_at: "2026-05-02T10:07:00Z",
-  },
-  {
-    npi: "1234567895",
-    phone: "212-555-0106",
-    status: "ghost",
-    ghost_reason: "no_behavioral_health",
-    provider_name: "Dr. Patricia Gonzalez, MD",
-    specialty: "Listed: Behavioral Health",
-    transcript:
-      "Agent: I'm calling to confirm if Dr. Gonzalez provides behavioral health services and accepts Aetna for therapy.\nReceptionist: Dr. Gonzalez is an orthopedic surgeon. We don't offer any mental health services here.\nAgent: She's listed in Aetna's behavioral health directory — is that an error?\nReceptionist: That has to be a mistake. This is a surgical practice.",
-    summary: "Orthopedic surgeon, no behavioral health services. Directory listing is erroneous.",
-    verified_at: "2026-05-02T10:08:30Z",
-  },
-  {
-    npi: "1234567896",
-    phone: "212-555-0107",
-    status: "ghost",
-    ghost_reason: "retired",
-    provider_name: "Dr. Kevin Park, LCSW",
-    specialty: "Anxiety, PTSD",
-    transcript:
-      "Agent: Good morning. I'm verifying whether Dr. Park is currently seeing patients and accepting Aetna for mental health therapy.\nReceptionist: Dr. Park retired in early 2024. This line is forwarded to billing only.\nAgent: Is there another provider at this location?\nReceptionist: The practice is closed. We're only handling final billing.",
-    summary: "Retired 2024. Practice closed.",
-    verified_at: "2026-05-02T10:10:00Z",
-  },
-  {
-    npi: "1234567897",
-    phone: "718-555-0108",
-    status: "real",
-    ghost_reason: null,
-    provider_name: "Brooklyn Mind Collective",
-    specialty: "Anxiety, Trauma / PTSD",
-    transcript:
-      "Agent: Hi, calling to confirm whether Brooklyn Mind Collective is accepting new Aetna patients for anxiety and trauma-focused therapy.\nReceptionist: Yes, we are! We have three therapists in-network with Aetna who specialize in anxiety and PTSD.\nAgent: Are they currently taking new patients?\nReceptionist: Two of them are — we can get someone in within two weeks.",
-    summary: "Confirmed in-network. 2 of 3 therapists accepting. Available within 2 weeks.",
-    verified_at: "2026-05-02T10:11:30Z",
-  },
-];
-
-export const DEMO_SUMMARY: AuditSummary = {
-  audit_id: DEMO_AUDIT_ID,
-  status: "completed",
-  carrier: "Aetna",
-  zip_code: "10001",
-  care_needs: ["Anxiety", "Trauma / PTSD"],
-  plan_type: "commercial",
-  member_plan_label: null,
-  recording_consent: true,
-  terms_acknowledged: true,
-  started_at: "2026-05-02T10:00:00Z",
-  completed_at: "2026-05-02T10:12:00Z",
-  providers_total: 8,
-  calls_completed: 8,
-  ghost_count: 6,
-  real_count: 2,
-  voicemail_count: 0,
-  other_count: 0,
-  ghost_rate: 0.75,
-  voicemail_rate: 0,
-  high_ghost_rate: true,
-  complaint_eligible: true,
-  error: null,
-  share_path: "/results/demo",
-  voice_mode: "pipecat",
-  loop_agent_note: null,
-  rag_hits: [],
-  top_providers: results.filter((r) => r.status === "real"),
-  results,
+export type DemoContext = {
+  carrier?: string;
+  zip?: string;
+  careNeeds?: string[];
+  planType?: string;
 };
+
+/** Deterministic RNG seeded from a string (FNV-1a + Xorshift32). */
+function rngFromString(seed: string): () => number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (h ^ seed.charCodeAt(i)) >>> 0;
+    h = Math.imul(h, 16777619);
+  }
+  return () => {
+    h = (h + 0x6d2b79f5) >>> 0;
+    let t = h;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pick<T>(arr: readonly T[], rng: () => number): T {
+  return arr[Math.floor(rng() * arr.length) % arr.length];
+}
+
+/**
+ * Generate a complete demo AuditSummary from an optional context.
+ * Results are deterministic: the same (carrier, zip, careNeeds, planType)
+ * combination always produces the same provider list and outcomes.
+ * Defaults to Aetna / 10001 / Anxiety + Trauma PTSD / commercial.
+ */
+export function buildDemoSummary(ctx?: DemoContext): AuditSummary {
+  const carrier   = ctx?.carrier                            ?? "Aetna";
+  const zip       = ctx?.zip                                ?? "10001";
+  const careNeeds = ctx?.careNeeds?.length ? ctx.careNeeds  : ["Anxiety", "Trauma / PTSD"];
+  const planType  = ctx?.planType                           ?? "commercial";
+
+  const seed = `${carrier}|${zip}|${careNeeds.join(",")}|${planType}`;
+  const rng  = rngFromString(seed);
+
+  const n         = 26 + Math.floor(rng() * 5); // 26–30 providers (~40s at 1.5s/call)
+  const specPool  = specialtyPool(careNeeds);
+
+  // Sample real provider entries from the Aetna NYC directory
+  const sampled = sampleProviders(rng, n);
+
+  // Fixed base timestamp so verified_at values look plausible
+  const startMs = new Date("2026-05-02T10:00:00Z").getTime();
+
+  const results: AuditSummary["results"] = [];
+  let ghostCount = 0;
+  let realCount  = 0;
+
+  for (let i = 0; i < n; i++) {
+    const provider   = sampled[i];
+    const isGhost    = rng() < 0.75;
+    const specialty  = pick(specPool, rng);
+    const verifiedAt = new Date(startMs + (i + 1) * 90_000).toISOString();
+
+    if (isGhost) {
+      const reason = pick(GHOST_REASONS, rng);
+      results.push({
+        npi:           provider.npi,
+        phone:         provider.phone,
+        status:        "ghost",
+        ghost_reason:  reason,
+        provider_name: provider.name,
+        specialty,
+        transcript:    ghostTranscript(reason, provider.name, carrier, careNeeds, planType, rng),
+        summary:       ghostSummary(reason, carrier),
+        verified_at:   verifiedAt,
+      });
+      ghostCount++;
+    } else {
+      results.push({
+        npi:           provider.npi,
+        phone:         provider.phone,
+        status:        "real",
+        ghost_reason:  null,
+        provider_name: provider.name,
+        specialty,
+        transcript:    realTranscript(provider.name, carrier, careNeeds, planType, rng),
+        summary:       realSummary(carrier, planType),
+        verified_at:   verifiedAt,
+      });
+      realCount++;
+    }
+  }
+
+  const ghostRate   = results.length > 0 ? ghostCount / results.length : 0;
+  const startedAt   = new Date(startMs).toISOString();
+  const completedAt = new Date(startMs + n * 90_000 + 60_000).toISOString();
+
+  return {
+    audit_id:          DEMO_AUDIT_ID,
+    status:            "completed",
+    carrier,
+    zip_code:          zip,
+    care_needs:        careNeeds,
+    plan_type:         planType,
+    member_plan_label: null,
+    recording_consent: true,
+    terms_acknowledged: true,
+    started_at:        startedAt,
+    completed_at:      completedAt,
+    providers_total:   n,
+    calls_completed:   n,
+    ghost_count:       ghostCount,
+    real_count:        realCount,
+    voicemail_count:   0,
+    other_count:       0,
+    ghost_rate:        ghostRate,
+    voicemail_rate:    0,
+    high_ghost_rate:   ghostRate >= 0.7,
+    complaint_eligible: ghostCount > 0,
+    error:             null,
+    share_path:        "/results/demo",
+    voice_mode:        "pipecat",
+    loop_agent_note:   null,
+    rag_hits:          [],
+    top_providers:     results.filter(r => r.status === "real"),
+    results,
+  };
+}
+
+/** Default demo — shown when no context is available (e.g. Dashboard replay). */
+export const DEMO_SUMMARY: AuditSummary = buildDemoSummary();

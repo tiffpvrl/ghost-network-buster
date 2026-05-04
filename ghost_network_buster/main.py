@@ -714,6 +714,8 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
     meta = _CALL_META.get(call_id, {})
     provider = meta.get("provider")
     carrier_hint = meta.get("carrier_hint", "your insurance")
+    care_needs: list[str] = meta.get("care_needs", [])
+    care_needs_text = ", ".join(care_needs) if care_needs else "behavioral health care"
     future = _PENDING_CALLS.get(call_id)
 
     def _looks_like_ivr_or_menu_stt(text: str) -> bool:
@@ -904,7 +906,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
             f"You are a healthcare directory verification assistant on a live phone call with {provider_name}. "
             f"A recorded introduction was already played at the start of this call — do NOT repeat it, "
             f"do NOT say you are calling on behalf of a new patient again unless they ask who is calling. "
-            f"Your goal is to verify whether the practice accepts {carrier_hint} for behavioral health "
+            f"Your goal is to verify whether the practice accepts {carrier_hint} for {care_needs_text} "
             "and is accepting new patients. "
             "Live phone transcription is imperfect and often arrives in fragments: if the provider's last "
             "message looks cut off mid-thought, trails off, or only answers part of the question (e.g. starts with "
@@ -955,7 +957,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
                         )
                         canned = (
                             f"Sorry, I didn't catch that clearly — does your practice accept "
-                            f"{carrier_hint} for behavioral health, and are you taking new patients?"
+                            f"{carrier_hint} for {care_needs_text}, and are you taking new patients?"
                         )
                         await self.push_frame(LLMFullResponseStartFrame())
                         await self.push_frame(LLMTextFrame(text=canned))
@@ -1193,7 +1195,7 @@ async def twilio_audio_ws(websocket: WebSocket, call_id: str) -> None:
         )
         opening_line = (
             f"Hi, I'm an AI assistant and this call is being recorded for directory accuracy purposes. "
-            f"I'm calling on behalf of a new patient looking for behavioral health care — "
+            f"I'm calling on behalf of a new patient looking for {care_needs_text} — "
             f"does your practice currently accept {carrier_hint} insurance, and are you accepting new patients?"
         )
 
