@@ -27,6 +27,7 @@ class VoiceProvider(ABC):
         provider: Provider,
         *,
         carrier_hint: str = "Aetna",
+        care_needs: list | None = None,
     ) -> CallResult:
         ...
 
@@ -201,6 +202,7 @@ class MockVoiceProvider(VoiceProvider):
         provider: Provider,
         *,
         carrier_hint: str = "Aetna",
+        care_needs: list | None = None,
     ) -> CallResult:
         rng = random.Random()
         delay_min = getattr(self._settings, "mock_voice_delay_min_s", 0.08) if self._settings else 0.08
