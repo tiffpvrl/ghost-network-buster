@@ -8,6 +8,14 @@ Built as a Columbia University Agentic AI capstone (May 2026).
 
 ---
 
+## Live URL & Demo
+Live URL can be found at: [https://ghost-network-buster.vercel.app/](url)
+
+*NOTE* that the deployed version does not go through our Twilio/Deepgram/Pipecat pipeline because the free version of Twilio that we are using requires you to verify phone numbers that the agent calls via OTP. This means we were able to set it up so that it calls our personal phone numbers, but it cannot be run on actual providers' phone numbers. Rest assured that the voice agent is fully working and you can see this in our demo linked here: [https://drive.google.com/file/d/1LibFWn4MIqikXnhj9umDktob1XW0RHKF/view?usp=sharing](url)!
+
+If you are interested in seeing the voice agent in action, you can clone this repo locally and set up your own Twilio, Deepgram, and Ngrok accounts – putting these into the .env file as listed in .env.example. On Twilio, you can then add your own phone number and verify yourself via OTP. Then, on data/providers_test.json, you can add your phone number. Finally, on .env, make sure you are setting "VOICE_PROVIDER" as "pipecat" and "PROVIDERS_DATA_FILE" as "data/providers_test.json".
+
+
 ## Class concepts → code
 
 | Concept | Implementation |
