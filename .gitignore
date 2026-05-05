@@ -13,3 +13,4 @@ data/audits/*.json
 data/memory_npi/*.json
 planning/
 aetna_raw/
+frontend\.env.production
