@@ -9,9 +9,9 @@ Built as a Columbia University Agentic AI capstone (May 2026).
 ---
 
 ## Live URL & Demo
-Live URL can be found at: [https://ghost-network-buster.vercel.app/](url)
+Live URL can be found at: [https://ghost-network-buster.vercel.app](https://ghost-network-buster.vercel.app)
 
-*NOTE* that the deployed version does not go through our Twilio/Deepgram/Pipecat pipeline because the free version of Twilio that we are using requires you to verify phone numbers that the agent calls via OTP. This means we were able to set it up so that it calls our personal phone numbers, but it cannot be run on actual providers' phone numbers. Rest assured that the voice agent is fully working and you can see this in our demo linked here: [https://drive.google.com/file/d/1LibFWn4MIqikXnhj9umDktob1XW0RHKF/view?usp=sharing](url)!
+*NOTE* that the deployed version does not go through our Twilio/Deepgram/Pipecat pipeline because the free version of Twilio that we are using requires you to verify phone numbers that the agent calls via OTP. This means we were able to set it up so that it calls our personal phone numbers, but it cannot be run on actual providers' phone numbers. Rest assured that the voice agent is fully working and you can see this in our demo linked here: [Demo Video](https://drive.google.com/file/d/1LibFWn4MIqikXnhj9umDktob1XW0RHKF/view?usp=sharing)!
 
 If you are interested in seeing the voice agent in action, you can clone this repo locally and set up your own Twilio, Deepgram, and Ngrok accounts – putting these into the .env file as listed in .env.example. On Twilio, you can then add your own phone number and verify yourself via OTP. Then, on data/providers_test.json, you can add your phone number. Finally, on .env, make sure you are setting "VOICE_PROVIDER" as "pipecat" and "PROVIDERS_DATA_FILE" as "data/providers_test.json".
 
@@ -292,14 +292,104 @@ The employer simulation pool (`frontend/src/data/providersPool.ts`) was built fr
 
 ---
 
-## GCP / Cloud Run
+## Deployment
 
-1. **Deploy**: `gcloud run deploy --source .` or build and push to Artifact Registry.
-2. **Minimum env vars**:
-   - `CORS_ORIGINS` — frontend origin(s), comma-separated
-   - `GOOGLE_CLOUD_PROJECT` — required for Vertex AI (LLM + classifier)
-   - `GCS_AUDITS_BUCKET` — optional; without it audits use `AUDIT_LOCAL_DIR` (ephemeral on Cloud Run)
-   - `GCS_MEMORY_BUCKET` — optional NPI memory persistence
-   - `DEMO_API_KEY` — recommended for public-facing deployments
-3. **IAM**: runtime service account needs `roles/storage.objectAdmin` on audit/memory buckets and Vertex AI user role.
-4. **Frontend**: build with `VITE_API_BASE=https://<cloud-run-url>` and host on Firebase Hosting or Cloud Storage + HTTPS.
+The application is deployed as two separate services:
+
+| Service | Platform | URL |
+|---------|----------|-----|
+| Backend API | Google Cloud Run | `https://ghost-network-buster-718451494976.us-central1.run.app` |
+| Frontend | Vercel | `https://ghost-network-buster.vercel.app` |
+
+### Backend — Google Cloud Run
+
+The backend is containerized via the included `Dockerfile` and deployed to Cloud Run using `gcloud run deploy --source .`, which builds the image via Cloud Build and deploys it to a managed Cloud Run service.
+
+**One-time setup:**
+
+```powershell
+# Enable required APIs
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com aiplatform.googleapis.com
+
+# Grant the default compute service account Vertex AI access
+$PROJECT_NUMBER = gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)'
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID `
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" `
+  --role="roles/aiplatform.user"
+```
+
+**Deploy / redeploy:**
+
+```powershell
+gcloud run deploy ghost-network-buster `
+  --source . `
+  --region us-central1 `
+  --platform managed `
+  --allow-unauthenticated `
+  --port 8080 `
+  --memory 1Gi `
+  --cpu 1 `
+  --timeout 300 `
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID" `
+  --set-env-vars "VOICE_PROVIDER=mock" `
+  --set-env-vars "MOCK_VOICE_DELAY_MIN_S=6" `
+  --set-env-vars "MOCK_VOICE_DELAY_MAX_S=9" `
+  --set-env-vars "MOCK_VOICE_REAL_SHARE=0.35" `
+  --set-env-vars "PROVIDERS_DATA_FILE=data/providers_sim.json" `
+  --set-env-vars "VERTEX_LOCATION=us-central1" `
+  --set-env-vars "VERTEX_PIPECAT_LLM_MODEL=gemini-2.5-flash" `
+  --set-env-vars "GOOGLE_GENAI_USE_VERTEXAI=true" `
+  --set-env-vars "HIGH_GHOST_RATE_THRESHOLD=0.7" `
+  --set-env-vars "DEMO_API_KEY=your-secret-key" `
+  --set-env-vars "CORS_ORIGINS=https://ghost-network-buster.vercel.app"
+```
+
+**Verify:**
+```powershell
+curl https://ghost-network-buster-718451494976.us-central1.run.app/api/health -UseBasicParsing
+# → {"status":"ok"}
+```
+
+**Update a single env var without full redeploy:**
+```powershell
+gcloud run services update ghost-network-buster `
+  --region us-central1 `
+  --set-env-vars "CORS_ORIGINS=https://your-new-frontend.vercel.app"
+```
+
+---
+
+### Frontend — Vercel
+
+The React/Vite frontend is deployed to Vercel. The backend API URL is baked into the bundle at build time via `VITE_API_BASE`.
+
+**One-time setup:**
+
+```powershell
+npm install -g vercel
+vercel login
+
+cd frontend
+vercel                               # initial deploy — gets you a preview URL
+vercel env add VITE_API_BASE production      # paste Cloud Run URL
+vercel env add VITE_DEMO_API_KEY production  # paste your DEMO_API_KEY value
+```
+
+**Deploy / redeploy to production:**
+
+```powershell
+cd frontend
+npm run build     # type-check + Vite production build → dist/
+vercel --prod     # push to ghost-network-buster.vercel.app
+```
+
+**Environment files:**
+- `.env.production` — local-only, gitignored. Contains `VITE_API_BASE` and `VITE_DEMO_API_KEY` for local production builds.
+- Production env vars are stored in Vercel (set via `vercel env add`) and injected at build time by Vercel CI.
+
+---
+
+### IAM notes
+
+- Cloud Run runtime service account needs `roles/aiplatform.user` for Vertex AI (LLM classifier + complaint letter generation).
+- If using GCS for audit/memory persistence, the same service account also needs `roles/storage.objectAdmin` on `GCS_AUDITS_BUCKET` and `GCS_MEMORY_BUCKET`.
